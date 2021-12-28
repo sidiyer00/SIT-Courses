@@ -1,0 +1,248 @@
+---
+output: pdf_document
+---
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(warning=FALSE, message=FALSE)
+```
+
+
+
+# QF301.  Homework #3.
+
+
+## `r format(Sys.time(), "%Y-%m-%d")`
+
+
+I pledge on my honor that I have not given or received any unauthorized assistance on this assignment/examination. I further pledge that I have not copied any material from a book, article, the Internet or any other source except where I have expressly cited the source.
+
+By filling out the following fields, you are signing this pledge.  No assignment will get credit without being pledged.
+
+Name: Zheng Li
+
+CWID: 10452796
+
+Date: 10/12/2021
+
+
+# Instructions
+In this assignment, you should use R markdown to answer the questions below. Simply type your R code into embedded chunks as shown above.
+When you have completed the assignment, knit the document into a PDF file, and upload both the .pdf and .Rmd files to Canvas.
+```{r}
+CWID = 10452796 #Place here your Campus wide ID number, this will personalize
+#your results, but still maintain the reproducible nature of using seeds.
+#If you ever need to reset the seed in this assignment, use this as your seed
+#Papers that use -1 as this CWID variable will earn 0's so make sure you change
+#this value before you submit your work.
+personal = CWID %% 10000
+set.seed(personal)#You can reset the seed at any time in your code,
+#but please always set it to this seed.
+```
+# Question 1 (20pt)
+
+## Question 1.1
+Use the quantmod package to obtain the daily adjusted close prices 2 different stocks.  You should have at least two years of data for both assets.  You should inspect the dates for your data to make sure you are including everything appropriately.  Create a data frame of the daily log returns both both stocks along with the lagged returns (2 lags).  You may wish to remove the date from your data frame for later analysis. Print the first 6 lines of your data frame.  (You may use the same two stocks as in Homework 2.)
+
+## \textcolor{red}{Solution:} 
+```{r}
+library(quantmod)
+getSymbols(c("IBM", "F"), src = "yahoo", from = "2019-01-01", to = "2020-12-31")
+log_ibm = dailyReturn(IBM$IBM.Adjusted, type = "log")[-1]
+ibm = as.numeric(log_ibm[-(1:2)])
+ibm1 = as.numeric(lag(log_ibm, k=1)[-2:-1])
+ibm2 = as.numeric(lag(log_ibm, k=2)[-2:-1])
+
+log_f = dailyReturn(F$F.Adjusted, type = "log")[-1]
+f = as.numeric(log_f[-(1:2)])
+f1 = as.numeric(lag(log_f, 1)[-(1:2)])
+f2 = as.numeric(lag(log_f, 2)[-(1:2)])
+
+df = data.frame(ibm, ibm1, ibm2, f, f1, f2)
+head(df, 6)
+```
+
+
+
+## Question 1.2 
+Split your data into training and testing sets (80% training and 20% test).
+
+Linearly regress one of your stock returns as a function of the lagged returns (2 lags) for both stocks.
+This should be of the form $r_{1,t} = \beta_0 + \beta_{1,1} r_{1,t-1} + \beta_{1,2} r_{1,t-2} + \beta_{2,1} r_{2,t-1} + \beta_{2,2} r_{2,t-2}$.
+Evaluate the performance of this model with the mean squared error on the test data.
+
+## \textcolor{red}{Solution:} 
+```{r}
+n = length(ibm)
+train = sample(n, n*0.8, replace = FALSE)
+lm = lm(ibm ~ ibm1 + ibm2 + f1 + f2)
+print((mean((ibm[-train] - predict(lm, df[-train])[1:101])^2)))
+
+```
+
+
+
+# Question 2 (35pt)
+
+## Question 2.1
+Using the same data, train/test split, and consider the same regression problem as in Question 1.2.
+Create a feed-forward neural network with a single hidden layer (2 hidden nodes) densely connected to the inputs.
+You may choose any activation functions you wish.
+
+### Question 2.1.1
+Write the mathematical structure for this neural network.  
+### \textcolor{red}{Solution:}
+
+$$ ibm = f^2(f_1^1(ibm1, ibm2, f1, f2, \beta_1^1), f_2^1(ibm1, ibm2, f1, f2, \beta_2^1), \beta^2)$$
+
+
+
+### Question 2.1.2
+Train this neural network on the training data.  
+Evaluate the performance of this model with the mean squared error on the test data.
+
+### \textcolor{red}{Solution:} 
+```{r}
+library(keras)
+df1 = data.frame(ibm, ibm1, ibm2, f1, f2)
+nn.reg = keras_model_sequential() %>% # Creating a model can sometimes take a bit of time
+  layer_flatten(input_shape = c(4)) %>%
+  layer_dense(units = 2, activation = "relu") %>%
+  layer_dense(1 , activation = "linear")
+
+summary(nn.reg)
+
+nn.reg %>% # State the loss function and optimizer (adam is a good choice usually)
+  compile(
+    loss = "mean_squared_error",
+    optimizer = "adam"
+  )
+
+nn.reg %>% # Fit the model to training data
+  fit(
+    x = as.matrix(df1[train,-1]), y = df1$ibm[train],
+    epochs = 1000, # how long to train for
+    verbose = 0
+  )
+
+ibm.nn.pred = predict(nn.reg, as.matrix(df1[-train,-1])) # Make predictions on the test data
+print(mean((ibm[-train] - ibm.nn.pred)^2))
+```
+the performance of this model is good since its MSE is even a tiny bit smaller than the linear regression model.
+
+
+## Question 2.2
+Using the same train/test split and consider the same regression problem as in Question 1.2.
+Train and test another neural network of your own design.
+
+## \textcolor{red}{Solution:} 
+```{r}
+nn.reg1 = keras_model_sequential() %>% # Creating a model can sometimes take a bit of time
+  layer_flatten(input_shape = c(4)) %>%
+  layer_dense(units = 15, activation = "relu") %>%
+  layer_dense(1 , activation = "linear")
+
+summary(nn.reg1)
+
+nn.reg1 %>% # State the loss function and optimizer (adam is a good choice usually)
+  compile(
+    loss = "mean_squared_error",
+    optimizer = "adam"
+  )
+
+nn.reg1 %>% # Fit the model to training data
+  fit(
+    x = as.matrix(df1[train,-1]), y = df1$ibm[train],
+    epochs = 1000, # how long to train for
+    verbose = 0
+  )
+
+ibm.nn.pred1 = predict(nn.reg1, as.matrix(df1[-train,-1])) # Make predictions on the test data
+print(mean((ibm[-train] - ibm.nn.pred1)^2))
+```
+This model has one hidden layer with 15 nodes. However, its performance is a bit worse than the previous NN model.
+
+
+## Question 2.3
+How would you determine if your models are overfitting the data? 
+Do you suspect this is happening in your models?
+
+## \textcolor{red}{Solution:} 
+One way is to find the mse with training data and testing data. If the mse of testing data  is a lot higher than training data mse, then overfitting.
+
+I don't really suspect my models are overfitting since the testing mse's are all smaller than traning mse's. 
+
+```{r}
+print("Linear Model training mse: ")
+print(mean((ibm[train] - predict(lm, df[train,]))^2))
+
+print("First Neural Network Model traning mse: ")
+
+print(mean((ibm[train] - predict(nn.reg, as.matrix(df1[train,-1])))^2))
+
+print("Second Neural Network Model traning mse: ")
+print(mean((ibm[train] - predict(nn.reg1, as.matrix(df1[train,-1])))^2))
+
+
+```
+
+
+
+
+
+# Question 3 (35pt)
+## Question 3.1
+Using the same data, train/test split, and consider the same regression problem as in Question 1.2.
+Train a decision tree on the training data.
+Evaluate the performance of this model with the mean squared error on the test data.
+
+## \textcolor{red}{Solution:} 
+```{r}
+library(tree)
+library(randomForest)
+
+tree.reg <- tree(ibm~., data = df1, subset = train)
+ibm.tree.pred = predict(tree.reg, df1[-train,])
+print(mean((ibm[-train] - ibm.tree.pred)^2))
+```
+Pretty good model since the mean squared error is pretty small, the same level as previous models.
+
+
+## Question 3.2
+Using the same train/test split and consider the same regression problem as in Question 1.2.
+Train and test a random forest with 250 trees and 2 predictors.
+
+## \textcolor{red}{Solution:} 
+```{r}
+rf.reg = randomForest(ibm~.,data=df1,subset=train,ntree=250,mtry=2,importance=TRUE)
+
+rf.pred = predict(rf.reg, df1[-train,])
+rf.MSE = mean((ibm[-train] - rf.pred)^2)
+print(rf.MSE)
+```
+
+
+## Question 3.3
+How would you determine if your models are overfitting the data? 
+Do you suspect this is happening in either the decision tree or random forest?
+
+## \textcolor{red}{Solution:} 
+```{r}
+print("tree training mse: ")
+print(mean((ibm[train] - predict(tree.reg, df1[train,]))^2))
+
+print("random forest training mse: ")
+print(mean((ibm[train] - predict(rf.reg, df1[train,]))^2)) #Training RMSE
+```
+I don't think any of these two models are overfitting. Although the random forest training mse is a tiny bit smaller than testing mse, it is still in about the same range.
+
+
+  
+# Question 4 (10pt)
+## Question 4.1
+Consider the same regression problem as in Question 1.2.
+Of the methods considered in this assignment, which would you recommend in practice?
+Explain briefly (1 paragraph) why you choose this fit.
+
+## \textcolor{red}{Solution:} 
+I would choose the linear model since its testing mse is one of the smallest ones and compare to the other best models above, it is the easiest model to construct and takes much less time. 
+

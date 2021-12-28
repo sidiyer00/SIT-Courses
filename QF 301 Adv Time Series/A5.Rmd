@@ -1,0 +1,308 @@
+---
+output: pdf_document
+---
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(warning=FALSE, message=FALSE)
+```
+
+
+
+# QF301.  Homework #5.
+## `r format(Sys.time(), "%Y-%m-%d")`
+
+
+I pledge on my honor that I have not given or received any unauthorized assistance on this assignment/examination. I further pledge that I have not copied any material from a book, article, the Internet or any other source except where I have expressly cited the source.
+
+By filling out the following fields, you are signing this pledge.  No assignment will get credit without being pledged.
+
+Name: Siddharth Iyer
+
+CWID: 10447455
+
+Date: 11/15/2021
+
+
+# Instructions
+In this assignment, you should use R markdown to answer the questions below. Simply type your R code into embedded chunks as shown above.
+When you have completed the assignment, knit the document into a PDF file, and upload both the .pdf and .Rmd files to Canvas.
+```{r}
+CWID = 10447455 #Place here your Campus wide ID number, this will personalize
+#your results, but still maintain the reproducible nature of using seeds.
+#If you ever need to reset the seed in this assignment, use this as your seed
+#Papers that use -1 as this CWID variable will earn 0's so make sure you change
+#this value before you submit your work.
+personal = CWID %% 10000
+set.seed(personal)#You can reset the seed at any time in your code,
+#but please always set it to this seed.
+```
+# Question 1 (40pt)
+
+## Question 1.1
+Use the quantmod package to obtain the daily adjusted close prices 15 different stocks.  You should have at least 5 years of data for all assets.  You should inspect the dates for your data to make sure you are including everything appropriately.  Create a data frame of the daily log returns of all stocks.  Print the first 6 lines of your data frame.  
+
+## \textcolor{red}{Solution:} 
+```{r}
+library(quantmod)
+stocks = c("MMM", "ABT", "AMD", "AAP", "AFL", "GOOG", "AMZN", "AAL", "AXP", "FDX", "AAPL", "T", "BBY", "BLK", "BK")
+
+for(stock in stocks){
+  getSymbols(stock, from="2010-01-01", to="2019-12-31", src="yahoo")
+}
+
+price_df = data.frame(MMM$MMM.Adjusted, ABT$ABT.Adjusted, AMD$AMD.Adjusted,
+                    AAP$AAP.Adjusted, AFL$AFL.Adjusted, GOOG$GOOG.Adjusted,
+                    AMZN$AMZN.Adjusted, AAL$AAL.Adjusted, AXP$AXP.Adjusted, 
+                    FDX$FDX.Adjusted, AAPL$AAPL.Adjusted, T$T.Adjusted, 
+                    BBY$BBY.Adjusted, BLK$BLK.Adjusted, BK$BK.Adjusted)
+colnames(price_df) <- stocks
+
+rets_df = data.frame(diff(log(MMM$MMM.Adjusted))[-1], diff(log(ABT$ABT.Adjusted))[-1], diff(log(AMD$AMD.Adjusted))[-1],
+                    diff(log(AAP$AAP.Adjusted))[-1], diff(log(AFL$AFL.Adjusted))[-1], diff(log(GOOG$GOOG.Adjusted))[-1],
+                    diff(log(AMZN$AMZN.Adjusted))[-1], diff(log(AAL$AAL.Adjusted))[-1],
+                    diff(log(AXP$AXP.Adjusted))[-1], diff(log(FDX$FDX.Adjusted))[-1], ... = diff(log(AAPL$AAPL.Adjusted))[-1], 
+                    diff(log(T$T.Adjusted))[-1], diff(log(BBY$BBY.Adjusted))[-1], diff(log(BLK$BLK.Adjusted))[-1], diff(log(BK$BK.Adjusted))[-1])
+
+colnames(rets_df) <- stocks
+
+head(rets_df)
+```
+
+## Question 1.2 
+Cluster these stocks based on the log returns.  
+Use K-Means Clustering with at least 20 attempts at clustering.
+Choose the number of clusters to use. Justify your choice in 1 paragraph (or less).
+Print the clusters.
+
+## \textcolor{red}{Solution:} 
+```{r}
+model2 = kmeans(t(rets_df), nstart=20, centers = 2)
+model3 = kmeans(t(rets_df), nstart=20, centers = 3)
+model4 = kmeans(t(rets_df), nstart=20, centers = 4)
+model5 = kmeans(t(rets_df), nstart=20, centers = 5)
+model6 = kmeans(t(rets_df), nstart=20, centers = 6)
+model7 = kmeans(t(rets_df), nstart=20, centers = 7)
+model8 = kmeans(t(rets_df), nstart=20, centers = 8)
+model9 = kmeans(t(rets_df), nstart=20, centers = 9)
+model10 = kmeans(t(rets_df), nstart=20, centers = 10)
+model11 = kmeans(t(rets_df), nstart=20, centers = 11)
+model12 = kmeans(t(rets_df), nstart=20, centers = 12)
+model13 = kmeans(t(rets_df), nstart=20, centers = 13)
+model14 = kmeans(t(rets_df), nstart=20, centers = 14)
+
+print(sort(model2$cluster))
+print(sort(model3$cluster))
+print(sort(model4$cluster))
+print(sort(model5$cluster))
+print(sort(model6$cluster))
+print(sort(model7$cluster))
+print(sort(model8$cluster))
+print(sort(model9$cluster))
+print(sort(model10$cluster))
+print(sort(model11$cluster))
+print(sort(model12$cluster))
+print(sort(model13$cluster))
+print(sort(model14$cluster))
+
+plot(c(model2$tot.withinss, model3$tot.withinss,model4$tot.withinss, model5$tot.withinss, model6$tot.withinss, model7$tot.withinss, model8$tot.withinss, model9$tot.withinss, model10$tot.withinss, model11$tot.withinss, model12$tot.withinss, model13$tot.withinss, model14$tot.withinss), ylab = "tot.withinss", xlab="clusteres-1")
+
+```
+I would use 3 clusters (note: on the graph 2 represents 3 clusters)...the largest drop in tot.withinns occurs between 2 and 3 clusters. Obviously the withinss will keep falling as you add more clusters, but the largest drop occurs between 2 and 3. 
+
+
+
+## Question 1.3
+Cluster these stocks based on the log returns.  
+Use Hierarchical Clustering with complete distance metric and print the dendrogram.
+Choose the number of clusters to use. Justify your choice in 1 paragraph (or less).
+Print the clusters.
+
+## \textcolor{red}{Solution:} 
+```{r}
+hc.complete.rets = hclust(dist(scale(t(rets_df))), method="complete")
+plot(hc.complete.rets,main="Complete Linkage",cex=.9)
+
+sort(cutree(hc.complete.rets,6))
+```
+I would use about 3 clusters...the largest drop is in the 3rd level If you follow the children in the 3rd level, you have about 3 clusters. 
+
+
+## Question 1.4
+Cluster these stocks based on the log returns.  
+Use Hierarchical Clustering with average distance metric and print the dendrogram.
+Choose the number of clusters to use. Justify your choice in 1 paragraph (or less).
+Print the clusters.
+
+## \textcolor{red}{Solution:} 
+```{r}
+hc.average.rets = hclust(dist(scale(t(rets_df))), method="average")
+plot(hc.average.rets,main="Average Linkage",cex=.9)
+
+sort(cutree(hc.average.rets,3))
+```
+I would choose 3 clusters. The largest drop is in the second level, which again means 3 clusters. It's almost identical to problem 1. 
+
+## Question 1.5
+Cluster these stocks based on the log returns.  
+Use Hierarchical Clustering with single distance metric and print the dendrogram.
+Choose the number of clusters to use. Justify your choice in 1 paragraph (or less).
+Print the clusters.
+
+## \textcolor{red}{Solution:} 
+```{r}
+hc.single.rets = hclust(dist(scale(t(rets_df))), method="single")
+cutree(hc.single.rets,2)
+plot(hc.single.rets,main="Single Linkage",cex=.9)
+
+```
+I would use 3 clusters because the largest drop occurs in the second level alongside BBY. This means AAL, AMD, the rest of the tree are 3 clusters. 
+
+
+## Question 1.6
+Of the clustering methods considered, which (if any) most closely matches your intuition.
+Explain briefly (1 paragraph) why you choose this fit.
+
+## \textcolor{red}{Solution:} 
+
+All the methods are quite bad...all of them produce clusters of uneven size and often group unrelated companies together. Also, the graphs are almost identical...so I guess the single is least computationally intensive. 
+
+
+# Question 2 (20pt)
+
+## Question 2.1
+Use the quantmod package to obtain the daily adjusted close prices for the SPY index and 15 different stocks.  You should have at least 5 years of data for all assets.  You should inspect the dates for your data to make sure you are including everything appropriately.  You may use the same 15 stocks as in Question 1.  Create a data frame of the lagged daily log returns (single lag) of all stocks, lagged daily log returns (single lag) of the SPY index, and th (non-lagged) direction of the SPY index.  Print the first 6 lines of your data frame.
+
+## \textcolor{red}{Solution:} 
+```{r}
+getSymbols("SPY", from="2010-01-01", to="2019-12-31", src="yahoo")
+spy_prices = SPY$SPY.Adjusted
+spy_rets = dailyReturn(spy_prices, type="log")[-1]
+head(spy_rets)
+
+df = rets_df
+df["SPY_lagged"] = spy_rets
+new_r = rep(0, 16)
+df = rbind(new_r, df)
+df = df[-length(df),]
+df["SPY"] = ((spy_rets > 0)+0)
+df = df[-1,]
+head(df)
+```
+
+
+## Question 2.2
+Split your data into training and testing sets (80% training and 20% test).
+
+Train a random forest classifier using 4 variables per tree and 500 trees in order to predict the direction of the SPY index.
+Print the summary of your classifier.
+Print the test accuracy and test confusion matrix.
+
+## \textcolor{red}{Solution:} 
+```{r, message=FALSE, warning=FALSE}
+df = as.data.frame(df)
+rownames(df) <- NULL
+
+library(randomForest)
+library(caret)
+
+N = nrow(df)
+train = sample(N, 4*N/5, replace = FALSE)
+rf.model = randomForest(formula = as.factor(SPY) ~ ., data= df, proximity = TRUE, importance = TRUE, subset = train, ntree=500, mtry = 4, type="classification")
+
+summary(rf.model)
+X_test = df[-train, -length(df)]
+y_test = df[-train, length(df)]
+y_test = as.vector(y_test)
+
+y_pred = as.integer(as.vector(predict(rf.model, X_test)))
+
+cat("Accuracy: ", 1 - sum(abs(y_test - y_pred))/length(y_pred), "\n")
+
+confusionMatrix(data = factor(y_pred), reference = factor(y_test))
+
+```
+
+
+## Question 2.3
+Using the trained classifier from Question 2.2, run Mean Decrease in Impurity (MDI) analysis.
+Print the feature importance of all predictors.
+
+## \textcolor{red}{Solution:} 
+```{r}
+rf.model$importance
+```
+
+
+## Question 2.4
+Interpret the MDI feature importances (GINI) computed in Question 2.3.  
+Comment on the most and least important predictors (or if all predictors are of equal importance).
+Your response should be approximately 1 paragraph.
+
+## \textcolor{red}{Solution:} 
+
+The most important factor is the lagged SPY. The least important factor is AAP. This makes sense because more often than not, AAP is in a cluster all by itself, making it a significant features but less likely to change outcomes.  
+
+This suggests it's a strongly auto regressive time series.  
+
+
+# Question 3 (20pt)
+
+## Question 3.1
+Consider the same data and classification problem as in Question 2.
+Run Mean Decrease in Accuracy (MDA) analysis on a random forest classifier.
+Print the feature importance of each predictor.
+
+## \textcolor{red}{Solution:} 
+
+The code is already above
+
+
+## Question 3.2
+Interpret the MDA feature importances computed in Question 3.1.  
+Comment on the most and least important predictors (or if all predictors are of equal importance).
+Does this match the MDI feature importances found in Question 2.3.
+Your response should be approximately 1 paragraph.
+
+## \textcolor{red}{Solution:} 
+
+...again the feature important shows that SPY_lagged is the most important predictor, BLK is second, and the weakest predictor is AAL (not AAP). So they aren't always consistent. 
+
+
+# Question 4 (20pt)
+
+## Question 4.1
+Consider the same data and classification problem as in Question 2.
+Run Principal Component Analysis (PCA) on the 16 predictors used for the classifer in Question 2 (and 3).
+Print the Proportion of Variance Explained (PCA) for each principal component.
+How many principal components are necessary to explain 80% of the variance?
+
+## \textcolor{red}{Solution:} 
+```{r, warning=FALSE, message=FALSE}
+pca = prcomp(df, formula = as.factor(SPY) ~ .,scale = TRUE, subset = train)
+pca$rotation
+
+pca.var = pca$sdev^2
+pve = pca.var/sum(pca.var)
+print("PCA explained variance: ")
+pve
+
+```
+8 PCA components exlain slight over 80% of the variance in the data. 
+
+## Question 4.2
+Interpret the PCA computed in Question 4.1.
+Comment on the importance of different predictors.
+Does this match the MDI and MDA analysis from Questions 2 and 3?
+Your response should be approximately 1 paragraph.
+
+## \textcolor{red}{Solution:} 
+PCA1: SPY_lagged is the largest contributer 
+PCA2: AMZN is the largest contributer in PCA2
+PCA8: ABT is the largest controbuter in last PCA at 80% threshold
+
+This doesn't match the MDI and MDA exactly but the PCA itself is a linear combination of factors, so makes senes that optimizing for variance will produce difference results than minimizing GINI. 
+
+
+
+
+

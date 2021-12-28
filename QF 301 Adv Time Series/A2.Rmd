@@ -1,0 +1,330 @@
+---
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(warning=FALSE, message=FALSE)
+```
+
+
+
+# QF301.  Homework #2.
+
+
+## `r format(Sys.time(), "%Y-%m-%d")`
+
+
+I pledge on my honor that I have not given or received any unauthorized assistance on this assignment/examination. I further pledge that I have not copied any material from a book, article, the Internet or any other source except where I have expressly cited the source.
+
+By filling out the following fields, you are signing this pledge.  No assignment will get credit without being pledged.
+
+Name: Siddharth Iyer
+
+CWID: 10447455
+
+Date: 9/24/2021
+
+
+# Instructions
+In this assignment, you should use R markdown to answer the questions below. Simply type your R code into embedded chunks as shown above.
+When you have completed the assignment, knit the document into a PDF file, and upload both the .pdf and .Rmd files to Canvas.
+```{r}
+CWID = 10447455 #Place here your Campus wide ID number, this will personalize
+#your results, but still maintain the reproducible nature of using seeds.
+#If you ever need to reset the seed in this assignment, use this as your seed
+#Papers that use -1 as this CWID variable will earn 0's so make sure you change
+#this value before you submit your work.
+personal = CWID %% 10000
+set.seed(personal)#You can reset the seed at any time in your code,
+#but please always set it to this seed.
+```
+
+# Question 1 (20pt)
+
+## Question 1.1
+Use the quantmod package to obtain the daily adjusted close prices 2 different stocks.  You should have at least two years of data for both assets. You should inspect the dates for your data to make sure you are including everything appropriately. Create a data frame of the daily log returns for both stocks.  Print the first and last 6 lines of your data frame.
+
+## \textcolor{red}{Solution:} 
+```{r}
+library(quantmod)
+stocks = c("AAPL", "AMD")
+getSymbols(stocks)
+AAPL = AAPL$AAPL.Adjusted
+AMD = AMD$AMD.Adjusted
+
+aapl_log_rets = dailyReturn(AAPL, type="log")[2:nrow(AAPL)]
+amd_log_rets = dailyReturn(AMD, type="log")[2:nrow(AMD)]
+
+df = data.frame(aapl_log_rets, amd_log_rets)
+colnames(df) <- c("aapl_rets", "amd_rets")
+
+head(df)
+tail(df)
+```
+
+## Question 1.2 
+List the names of the variables in the data set.
+
+## \textcolor{red}{Solution:} 
+Variable Names: aapl_rets, amd_rets
+
+
+## Question 1.3 
+As the date will be unimportant, remove that field from your data frame
+
+## \textcolor{red}{Solution:} 
+```{r}
+row.names(df) <- NULL
+head(df)
+```
+
+## Question 1.4 
+What is the mean and standard deviation of each variable? Create a simple table of the means and standard deviations.
+
+## \textcolor{red}{Solution:} 
+```{r}
+summary_table = data.frame(c(mean(df$aapl_rets), sd(df$aapl_rets)), c(mean(df$amd_rets), sd(df$amd_rets)))
+colnames(summary_table) <- c("AAPL", "AMD")
+rownames(summary_table) <- c("Mean", "Sd")
+summary_table
+```
+
+
+
+## Question 1.5  
+Regress one of your stock returns as a function of the other (simultaneous data). This should be of the form $r_1 = \beta_0 + \beta_1 r_2$. (No train/test split is required here.)
+
+## \textcolor{red}{Solution:} 
+```{r}
+m1 = glm(aapl_rets~amd_rets, data = df)
+summary(m1)
+```
+
+# Question 2 (40pt)
+
+
+## Question 2.1
+Using the data set that you loaded for the first problem, choose one of your stocks, and create a data frame consisting of lagged returns going up to 5 days back.
+
+## \textcolor{red}{Solution:} 
+```{r}
+r0 = df$aapl_rets[-5:-1]
+r1 = as.numeric(lag(df$aapl_rets,k=1))[-5:-1]
+r2 = as.numeric(lag(df$aapl_rets,k=2))[-5:-1]
+r3 = as.numeric(lag(df$aapl_rets,k=3))[-5:-1]
+r4 = as.numeric(lag(df$aapl_rets,k=4))[-5:-1]
+r5 = as.numeric(lag(df$aapl_rets,k=5))[-5:-1]
+
+
+aapl_rets_lagged = data.frame(r0,r1,r2,r3,r4,r5)
+head(aapl_rets_lagged)
+```
+
+## Question 2.2 
+Split your data into a training set and a testing set (50% in each set). 
+Create an AR(1) model for your stock returns. Provide the test mean squared error.
+
+## \textcolor{red}{Solution:} 
+```{r, warning=FALSE}
+train=sample(nrow(aapl_rets_lagged),nrow(aapl_rets_lagged)/2,replace=FALSE)
+ar1=glm(r0~r1,data=aapl_rets_lagged,subset=train)
+
+pred=predict(ar1,aapl_rets_lagged[-train,])
+MSE=mean((pred-aapl_rets_lagged$r0[-train])^2)
+cat("AR(1) RMSE: ", sqrt(MSE), "\n")
+
+#Compare with naive/constant predictor:
+MSE0 = mean((mean(aapl_rets_lagged$r0[train])-aapl_rets_lagged$r0[-train])^2)
+cat("Base RMSE: ", sqrt(MSE0), "\n")
+```
+
+For this dataset, the AR(1) model seems very good compared to glm as it has a low MSE. 
+
+## Question 2.3
+Evaluate if your AR(1) model is weakly stationary or unit-root nonstationary.
+
+### (a) If your model is weakly stationary, provide the (long-run) average returns and autocovariances for your model.  How do these compare with the empirical values? If your model is (unit-root) nonstationary, please interpret your model.  Give as much detail as possible.
+
+## \textcolor{red}{Solution:}
+
+```{r}
+#summary(ar1)
+b0 = summary(ar1)$coefficients[1,1]
+b1 = summary(ar1)$coefficients[2,1]
+b1.se = summary(ar1)$coefficients[2,2]
+abs(b1) < 1 #If true then suspect weakly stationary
+
+#Test for unit-root nonstationary
+t = (b1 - 1)/b1.se
+cat("t stat: ", t, "\n")
+cat("p-value: ", pnorm(t), "\n") #Large enough data, treat as normal
+#If small enough then reject the null hypothesis
+
+cat("Long run average returns: ", b0/(1-b1), "\n")
+cat("Long run autocovariances: ", sd(pred-aapl_rets_lagged$r0[-train])^2 / (1-b1^2), "\n")
+```
+The long run average returns are very close to empirical numbers of .00107.
+
+The model is unit root nonstationary because the weak stationarity condition in FALSE, and the p-value is too large. 
+
+The model is r0 = -1.612e-18 + 1.000*r1. The 1-lag is very significant according to the t-stat, and for some reason, none of the other variables contribute significantly to r0 because their coefficients are 0. I'm not sure if this is a mistake or AAPL stock returns just happen to be a simple drift from the previous day. 
+
+
+### (b) Provide the formulas for the 1- and 2- step ahead forecasts. What are the variances for these forecast errors?
+
+### \textcolor{red}{Solution:} 
+
+1-step ahead forecast: $\hat{X_t(1)} = \beta_0 + \beta_1 X_{t}$ 
+
+$Var(e_t(1)) = \sigma_\epsilon^2$
+
+2-step ahead forecast: $X_t(2) = \beta_0 + \beta_1\hat{X_t(1)}$
+
+$Var(e_t(2)) = (1+\beta_1^2)\sigma_\epsilon^2$
+
+
+### (c) Using the same train/test split as in Question 2.2. Create an AR(5) model for your stock returns. Provide the test mean squared error.
+
+### \textcolor{red}{Solution:} 
+
+```{r, warning=FALSE}
+y_var = c("r0")
+x_var = c("r1", "r2", "r3", "r4", "r5")
+
+X_train = as.matrix(aapl_rets_lagged[train,x_var])
+Y_train = as.matrix(aapl_rets_lagged[train,names(aapl_rets_lagged) %in% y_var])
+
+X_test = as.matrix(aapl_rets_lagged[-train,x_var])
+Y_test = as.matrix(aapl_rets_lagged[-train,names(aapl_rets_lagged) %in% y_var])
+
+
+ar5 = lm(r0~r1+r2+r3+r4+r5,data=aapl_rets_lagged,subset=train)
+
+pred=predict(ar5,aapl_rets_lagged[-train,])
+MSE = mean((pred-aapl_rets_lagged$r0[-train])^2) #Test MSE
+cat("AR(5) RMSE: ", sqrt(MSE), "\n") #Root mean squared error
+
+ar5
+```
+
+## Question 2.4
+Using the same train/test split as in Question 2.2.
+Using Ridge regression, produce an AR(5) linear regression.  Find the optimal tuning parameter for this regression.  What is the test mean squared error?
+
+## \textcolor{red}{Solution:} 
+```{r}
+library(glmnet)
+lambda=10^seq(-2,4,by=.01)
+ridge.mod = glmnet(X_train, Y_train, alpha = 0, family="gaussian", lambda=lambda)
+cv.out=cv.glmnet(X_train, Y_train, alpha=0,lambda=lambda)
+plot(cv.out)
+bestlam=cv.out$lambda.min
+cat("Optimal Lambda (Ridge): ", bestlam, "\n")
+
+bestridge.pred=predict(ridge.mod,s=bestlam,newx=X_test)
+cat("Ridge Model MSE: ", mean((bestridge.pred-aapl_rets_lagged$r0[-train])^2), "\n") #Ridge MSE
+
+ridgecoef=glmnet(aapl_rets_lagged[,x_var],aapl_rets_lagged[,names(aapl_rets_lagged) %in% y_var],alpha=0,lambda=lambda)
+predict(ridgecoef,type="coefficients",s=bestlam)
+```
+
+## Question 2.5
+Using the same train/test split as in Question 2.2.
+Using LASSO regression, produce an AR(5) linear regression.  Find the optimal tuning parameter for this regression.  What is the test mean squared error?
+
+## \textcolor{red}{Solution:} 
+```{r}
+lambda=10^seq(-2,4,by=.01)
+lasso.mod = glmnet(X_train, Y_train, alpha = 1, family="gaussian", lambda=lambda)
+cv.out=cv.glmnet(X_train, Y_train, alpha=0,lambda=lambda)
+plot(cv.out)
+bestlam=cv.out$lambda.min
+cat("Optimal Lambda (Lasso): ", bestlam, "\n")
+
+bestridge.pred=predict(lasso.mod,s=bestlam,newx=X_test)
+cat("Lasso Model MSE: ", mean((bestridge.pred-aapl_rets_lagged$r0[-train])^2), "\n") #Lasso MSE
+
+lassocoef=glmnet(aapl_rets_lagged[,x_var],aapl_rets_lagged[,names(aapl_rets_lagged) %in% y_var],alpha=1,lambda=lambda)
+predict(lassocoef,type="coefficients",s=bestlam)
+```
+
+## Question 2.6
+Briefly (1 paragraph or less) compare the coefficients for the 3 AR(5) regressions computed.
+
+## \textcolor{red}{Solution:} 
+
+Coefficients:
+(Intercept)           r1           r2           r3           r4           r5  
+  1.773e-18    1.000e+00           NA           NA           NA           NA  
+  
+Lambda (Ridge):  0.01 
+Ridge Model MSE:  3.751595e-06 
+6 x 1 sparse Matrix of class "dgCMatrix"
+                      s1
+(Intercept) 9.335306e-05
+r1          1.820913e-01
+r2          1.822399e-01
+r3          1.821839e-01
+r4          1.820328e-01
+r5          1.818509e-01
+
+Optimal Lambda (Lasso):  0.01 
+Lasso Model MSE:  0.0001141452 
+6 x 1 sparse Matrix of class "dgCMatrix"
+                      s1
+(Intercept) 0.0005133494
+r1          0.5072825685
+r2          .           
+r3          .           
+r4          .           
+r5          .  
+
+All of these models gave very different coefficients. For the unregularized linear model, r1 had a coefficient of 1, making me think that something was wrong with my implementation. But it seems that r0 and lagged r0 are very similar according to lm.
+
+For ridge regression, all the coefficients are about .2, which is surprising because all of them have similar impact on the outcome. In contrast, Lasso was very different with r1 being the only feature important enough to weight. Against the coefficient is .507, which is quite large. I think this dataset isn't heavily dependent on lags and any regressions that are found are similar and can be aggregated into a single r1 coefficient. 
+
+
+# Question 3 (15pt)
+
+## Question 3.1
+Write a function that works in R to gives you the parameters from a linear regression on a data set of $n$ predictors.  You can assume all the predictors and the prediction is numeric.  Include in the output the standard error of your variables. You cannot use the lm command in this function or any of the other built in regression models.
+
+## \textcolor{red}{Solution:} 
+
+For this example, I used Boston dataset available through MASS library. X, Y both passed in as matrices.
+```{r}
+library(MASS)
+library(tibble)
+library(matlib)
+
+multi_lin_reg <- function(X_data, Y_data){
+  beta0 = rep(1,length(Y_data))
+  X_data = cbind(beta0, X_data)
+
+  beta_hat = solve(t(X_data) %*% X_data) %*% t(X_data) %*% Y_data
+  beta_hat
+}
+
+# for some reason, the lagged data is exactly singular. Not sure why, but I will use Boston data
+
+# multi_lin_reg(as.matrix(aapl_rets_lagged[-1]), aapl_rets_lagged$r0)
+Y <- Boston$medv
+X <- as.matrix(Boston[-ncol(Boston)])
+
+multi_lin_reg(X, Y)
+```
+
+## Question 3.2
+Compare the output of your function to that of the lm command in R.
+
+## \textcolor{red}{Solution:} 
+```{r}
+lm(medv~., data = Boston)
+```
+
+Here we can see that the betas we get are exactly the same. 
+
+

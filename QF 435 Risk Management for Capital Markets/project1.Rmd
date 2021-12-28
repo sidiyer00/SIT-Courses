@@ -1,0 +1,668 @@
+---
+title: "QF 435 - Project 1"
+author: "Siddharth Iyer, Zheng Li, Leonid Maksymenko"
+date: "3/29/2021"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set
+library(quantmod)
+library(Rcpp)
+```
+
+## Data
+
+Our universe of stocks consists of the following 27 US equities:
+
+```{r, echo=FALSE}
+stocks = c("SPY", "AAPL", "CSCO", "HON", "KO", "NKE", "WBA", "AMGN", "CVX", "IBM", "MCD", "PG", "WMT", "AXP", "DIS", "INTC", "MMM", "TRV", "BA", "GS", "JNJ", "MRK", "UNH", "CAT", "HD", "JPM", "MSFT", "VZ")
+stocks
+```
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+# get stock data and put into xts obj
+stock_data = getSymbols("SPY", from="1999-05-01", to="2020-12-31", env = NULL)[, 6]
+for(i in 2:28){
+  temp = getSymbols(stocks[i], from="1999-05-01", to="2020-12-31", env = NULL)[, 6]
+  stock_data = cbind(stock_data, temp)
+}
+rm(temp)
+#write.csv(as.data.frame(stock_data), file = "equity_data.csv")
+```
+
+## Performance Summary
+
+1. Among our 27 equities, the Min, Mean, and Max are listed for a few key metrics:
+
+```{r, echo=FALSE}
+# log returns xts frame
+returns_data = log(lag(stock_data, -1) / stock_data)[-nrow(stock_data)]
+rets_mean = c()
+vol = c()
+SR = c()
+for(i in 2:28){
+  temp_data = as.numeric(returns_data[, i])
+  rets_mean = c(rets_mean, mean(temp_data, na.rm = TRUE) * 252)
+  vol = c(vol, sd(temp_data, na.rm = TRUE) * sqrt(252))
+  SR = c(SR, mean(temp_data, na.rm = TRUE) * sqrt(252)/sd(temp_data, na.rm = TRUE))
+}
+rm(temp_data)
+rets_dist = c(min(rets_mean), mean(rets_mean), max(rets_mean))
+vol_dist = c(min(vol), mean(vol), max(vol))
+SR_dist = c(min(SR), mean(SR), max(SR))
+ratios_table = rbind(rets_dist, vol_dist, SR_dist)
+colnames(ratios_table) <- c("Min", "Mean", "Max")
+rownames(ratios_table) <- c("Log Returns", "Volatility", "Sharpe Ratio")
+ratios_table
+rm(rets_dist, vol_dist, SR_dist, ratios_table)
+```
+
+2. 
+
+```{r, echo=FALSE}
+plot(vol, rets_mean, type = "p", main = "Mean vs Volatility for Given Equity Universe", xlab = "Volatility", ylab = "Mean")
+```
+
+It seems that most of these companies have poor Sharpe Ratios. For several companies, a higher risk doesn't bring higher rewards as the cruve dips. There are 5 stock at the top of the curve that makes sense for each risk tolerance level. 
+
+
+3. Below is a table of metrics and their min, mean, and max among stocks in our Universe. 
+
+```{r, echo=FALSE}
+alpha = c()
+beta = c()
+treynor = c()
+track_error = c()
+info_ratio = c()
+for(i in 2:28){
+  model = lm(returns_data[, i]~returns_data[, 1])
+  temp_data = as.numeric(returns_data[, i])
+  
+  alpha = c(alpha, model$coefficients[1] * 252)
+  beta = c(beta, model$coefficients[2])
+  treynor = c(treynor, mean(temp_data, na.rm = TRUE) * 252/model$coefficients[2])
+  track_error = c(track_error, sd(as.numeric(returns_data[, i] - returns_data[, 1]), na.rm = TRUE) * sqrt(252))
+  info_ratio = c(info_ratio, mean(as.numeric(returns_data[, i] - returns_data[, 1]), na.rm = TRUE) * 252/track_error[-1])  
+}
+rm(temp_data)
+alpha_dist = c(min(alpha), mean(alpha), max(alpha))
+beta_dist = c(min(beta), mean(beta), max(beta))
+treynor_dist = c(min(treynor), mean(treynor), max(treynor))
+track_dist = c(min(track_error), mean(track_error), max(track_error))
+info_dist = c(min(info_ratio), mean(info_ratio), max(info_ratio))
+metrics_table = rbind(alpha_dist, beta_dist, treynor_dist, track_dist, info_dist)
+colnames(metrics_table) <- c("Min", "Mean", "Max")
+rownames(metrics_table) <- c("Jensen's Alpha", "Beta", "Treynor Ratio", "Tracking Error", "Information Ratio")
+metrics_table
+rm(alpha_dist, beta_dist, treynor_dist, track_dist, info_dist, metrics_table)
+```
+
+4. 
+
+```{r}
+plot(beta, rets_mean, main = "Beta vs Returns for Universe of Stocks", xlab ="Beta", ylab="Returns")
+```
+
+The data shows a weak relationship between beta and returns. At least for this small Universe of stocks, the returns seems to have no correlation with beta except for a few stocks (outliers) that outperform the rest. 
+
+
+## Back-Testing
+1. Split data into "In Sample" and "Out Sample" for back testing. Ranges listed below
+
+```{r, echo=FALSE}
+# getting the weights 
+vol_weight = c()
+sharpe_weight = c()
+unif_weight = rep(0, times = 27)
+for(i in 1:27){
+  vol_weight = c(vol_weight, (1/vol[i]^2)/sum(1/vol^2))
+  sharpe_weight = c(sharpe_weight, SR[i]/sum(SR))
+}
+# getting the in sample and out sample data
+in_sample = returns_data[index(returns_data) >= "2017-01-03" & index(returns_data) <= "2018-12-30", 1:28]
+out_sample = returns_data[index(returns_data) >= "2019-01-03" & index(returns_data) <= "2020-12-30", 1:28]
+range(index(in_sample))
+range(index(out_sample))
+```
+
+2. 
+```{r, echo=FALSE}
+# getting the weights 
+vol_weight = c()
+sharpe_weight = c()
+unif_weight = rep(1/27, times = 27)
+in_sample_vol = c()
+in_sample_SR = c()
+for(i in 2:28){
+  temp_data = as.numeric(in_sample[, i])
+  in_sample_vol = c(in_sample_vol, sd(temp_data, na.rm = TRUE) * sqrt(252) )
+  in_sample_SR = c(in_sample_SR, mean(temp_data, na.rm = TRUE) * sqrt(252)/sd(temp_data, na.rm = TRUE))
+}
+for(i in 2:28){
+  vol_weight = c(vol_weight, (1/in_sample_vol[i]^2)/sum(1/in_sample_vol^2))
+  sharpe_weight = c(sharpe_weight, in_sample_SR[i]/sum(in_sample_SR))
+}
+weights_df = data.frame(unif_weight, vol_weight, sharpe_weight)
+weights_df*100
+```
+
+
+3. 
+
+```{r, echo=FALSE}
+# plan: multiply by weights across each returns row 
+unif_folio = c(1)
+vol_folio = c(1)
+sharpe_folio = c(1)
+market_folio = c(1)
+for(i in 2:nrow(out_sample)){
+  unif_folio = c(unif_folio, unif_folio[i-1] * exp(sum(as.numeric(out_sample[i, 2:28] * unif_weight))))
+  vol_folio = c(vol_folio, vol_folio[i-1]* exp(sum(as.numeric(out_sample[i, 2:28] * vol_weight), na.rm = TRUE)))
+  sharpe_folio = c(sharpe_folio, sharpe_folio[i-1]*exp(sum(as.numeric(out_sample[i, 2:28] * sharpe_weight), na.rm = TRUE)))
+  market_folio = c(market_folio, market_folio[i-1]*exp(as.numeric(out_sample[i, 1])))
+}
+plot(unif_folio, type = "l", xlim = c(0, 510), ylim = c(.75, 1.75), col = 1, ylab = "Returns", main = "Performance of Unif, Volatility, Sharpe, and Market Portfolio", xlab = "Days")
+par(new=T)
+plot(vol_folio, type = "l", xlim = c(0, 510), ylim = c(.75, 1.75), col = 2, axes = FALSE, ylab = "", xlab = "")
+par(new=T)
+plot(sharpe_folio, type = "l", xlim = c(0, 510), ylim =c(.75, 1.75), col = 3, axes = FALSE, ylab = "", xlab = "")
+par(new=T)
+plot(market_folio, type = "l", xlim = c(0, 510), ylim = c(.75, 1.75), col = 4, axes = FALSE, ylab = "", xlab = "")
+legend("topleft", legend=c("Benchmark", "Sharpe", "Volatility", "Uniform"),
+       col=c(1, 2, 3, 4))
+```
+
+## 3  Random Numbers and Monte Carlo Simulation
+
+Core Questions (30 Points)
+
+1.
+Monte Carlo
+```{r}
+numSims = 100000
+game <- function(){
+  x = sample.int(6,6, replace = TRUE)
+  return (as.integer((max(x) - min(x)) < 3))
+}
+diceGames <- replicate(numSims, game())
+result <- mean(diceGames)
+result #0.058444 (10_000_000 simulations)
+####Graphing
+cumDice <- cumsum(diceGames)/seq_along(diceGames)
+plot(cumDice, type ='l')
+```
+Theoretical 
+We have 6 dice, each with 6 options giving us 46,656 possible combinations. Our difference must be less than 3.
+
+Analytical Solution
+
+There are $6^6$ total possible outcomes from 6 rolls. We want the probability that the max and min are 0, 1, or 2 apart. 0 apart means they are all the same number (6 ways). 
+
+1 apart means [1,2], [2,3], [3,4], [4,5], [5,6]...5 * (2^6 - 2) = 310.
+
+2 apart means [1,3], [2,4], [3,5], [4,6]...4 * (3^6 - 2 * 2^6) = 2404. 
+
+(1 + 310 + 2404)/6^6 = 0.05819187. 
+
+
+#2
+To calculate k we must calculate X. To do that we need to do trials until we can get 2
+wins in a row
+```{r}
+#install.packages(Rcpp)
+cppFunction("int flipCoins(){
+  int prev = 0;
+  int next = 0;
+  int fails = 0;
+  while ((prev != 1) || (next != 1)){
+    prev = next;
+    next = rand()%2+1;
+    fails++;
+  }
+  return fails;
+            }")
+numSims = 1000000
+flips <- replicate(numSims, flipCoins())
+mean(flips) #6.005382
+x<- seq(0,2,by=0.01)
+plot(x, 1-6.005382*x, type = 'l')
+```
+k should be 1/6.005382
+
+#3
+calculate pi using a circle simulation
+```{r}
+# install.packages('plotrix')
+library(plotrix)
+pi = function(n) {
+  x = runif(n, -1, 1)
+  y = runif(n, -1, 1)
+  plot(x, y, asp = 1, xlim = c(-1, 1), cex = 0.25)
+  draw.circle(0, 0, 1)
+  pin = sum(ifelse(sqrt(x^2 + y^2 <= 1), 1, 0))
+  print(4 * pin/n)
+}
+pi(1000)
+```
+#4
+Consider the case of a continuously distributed uniform random variable $X∼U(0,1)$. At the same time, consider $Y_k=X^k$, where $k∈Z$ is an integer. Your task is the following:
+
+
+```{r, echo=FALSE}
+
+x <- seq(0, 1, by = 0.0001)
+
+plot(x, x^1, type = 'l', ylim = c(0,1), col = 1, main = 'Raising unform to poistive powers:')
+lines(x, x^2, col = 2)
+lines(x, x^3, col = 3)
+lines(x, x^4, col = 4)
+lines(x, x^5, col = 5)
+lines(x, x^6, col = 6)
+
+plot(x, x^-1, col = 1, type = 'l',main = 'Raising unform to negative powers:')
+lines(x, x^-2, col = 2)
+lines(x, x^-3, col = 3)
+lines(x, x^-4, col = 4)
+lines(x, x^-5, col = 5)
+lines(x, x^-6, col = 6)
+
+```
+
+*(a)* Find a closed-form expression for the expectation and variance of $Y_k$, i.e.$E[Y_k]$and $V[Y_k]$.Show the steps needed to derive each expression. (4 Points)
+
+Let $Y_k=X^k$. Then $Y_k$ is also a random variable. The cumulative distribution function of $Y_k$ is given by:
+
+$F_Y(y)=\mathbb{P}(X^k≤y)=\mathbb{P}(X≤y^\frac{1}{k})=\int_{0}^{y^\frac{1}{k}}dx=y^\frac{1}{k}$  
+and the density function of $Y$ is given by  
+$\frac{d}{dy}F_Y(y) = f_Y(y)=\frac{1}{k}y^\frac{1-k}{k}$
+ for $y∈[0,1]$.
+
+The expected value $E[Y_k]$ is given by  
+$E[Y_k]=\frac{1}{k}\int_{0}^{1}y\cdot y^\frac{1-k}{k}dy = \frac{1}{k+1}$.  
+
+Variance $V[Y_k]$ is given by  
+$V[Y_k] = E[Y_k^2]-E[Y_k]^2 = \frac{1}{2k}-\frac{1}{(k+1)^2} = \frac{k^2+1}{2k(k+1)^2}$
+
+*(b)* In terms of k, find the condition for which $E[Y^k]$and $V[Y^k]$are finite while at the same time satisfying the condition $V[Y_k]>0$. (2 Points)  
+```{r, echo=FALSE}
+evalu <- function(k){1/(k+1)}
+evar <- function(k){((k^2)+1)/ (2*k*(k+1)^2) }
+x <- seq(-10, 10, by = 0.001)
+
+plot(x, 
+     evalu(x), 
+     type = 'l', 
+     col = 'dark red',
+     xlim = c(-5,5), ylim = c(-5,5), 
+     ylab = 'y', 
+     main = 'Expected Value and Variance')
+lines(x,
+      evar(x),
+      col="dark blue", 
+      type ='l')
+legend(-5, 5, 
+       legend = c('Expected value', 'Variance'), 
+       col = c( 'dark red','dark blue'), 
+       lty = 1)
+```
+The condition is satisfied for $k∈(0,\infty)$  
+
+*(c)* Using MC simulation, create a function that estimates $E[Y^k]$and $V[Y^k]$for a given k based on N= 105 samples. Plot each estimate versus the true value from step 1, for $k= -10,...,-1,0,1,...,10$.What do the conditions from the previous step tell us? (3 Points)  
+```{r}
+numSim = 105
+powers = -10:10
+#create a matrix of uniform values
+unif_rand = runif(numSim)
+
+#calculate the mean, var vectors for each power
+means <-c()
+vars <- c()
+for(i in 1:length(powers)){
+  unif_pow <- unif_rand^powers[i]
+  means <- c(means, mean(unif_pow))
+  vars <- c(vars, var(unif_pow))
+}
+```
+```{r, echo=FALSE}
+plot(powers, 
+     evalu(powers), 
+     col = 'dark red', 
+     ylab = 'y', 
+     main = 'Predicted Exp. val and Var. v.s. Simulated')
+
+points(powers, evar(powers), col = 'dark blue')
+lines(powers, means , col = 'red' )
+lines(powers, vars, col = 'blue')
+legend(-10, 1, 
+       legend = c('Actual Expected value', 'Actual Variance','Expected value', 'Actual Variance'), 
+       col = c( 'red','blue','dark red','dark blue'), 
+       lty = c(1,1,NA,NA),
+       pch = c(NA,NA,1,1),
+       )
+
+```
+The expected value and variance for values less than 0 is very large and off the graph.  
+
+*(d)* Finally, impose the conditions for $k$ from step (b) and repeat the same plot from step (c). Elaborate. (1 Points)  
+```{r}
+numSim = 105
+powers = 1:10
+#create a matrix of uniform values
+unif_rand = runif(numSim)
+
+#calculate the mean, var vectors for each power
+means <-c()
+vars <- c()
+for(i in 1:length(powers)){
+  unif_pow <- unif_rand^powers[i]
+  means <- c(means, mean(unif_pow))
+  vars <- c(vars, var(unif_pow))
+}
+```
+```{r, echo=FALSE}
+plot(powers, 
+     evalu(powers), 
+     col = 'dark red', 
+     xlim = c(0.75,10), ylim = c(0,1),
+     ylab = 'y', 
+     main = 'Predicted Exp. val and Var. v.s. Simulated')
+
+points(powers, evar(powers), col = 'dark blue')
+lines(powers, means , col = 'red' )
+lines(powers, vars, col = 'blue')
+legend(6, 1, 
+       legend = c('Actual Expected value', 'Actual Variance','Expected value', 'Actual Variance'), 
+       col = c( 'red','blue','dark red','dark blue'), 
+       lty = c(1,1,NA,NA),
+       pch = c(NA,NA,1,1),
+       )
+
+```
+With the restrictions imposed we now see that our theoretical and predicted values are rather close, aside from the variance diverging towards the end.  
+
+## Bonus Question
+We can define the probabilities as a recursive function.
+1/2 - head
+1/2 - tail
+
+Let $x$ be the expected number of flips to get 1 head  
+$$x = \frac{1}{2}*1 + \frac{1}{2} (x+1)\ 
+$x=\frac{1}{2} + \frac{x+1}{2}\
+2x = 2 + x\
+x = 2$$  
+
+Observe above: we have a $\frac{1}{2}$ to get a head. In that case only $1$ toss is required. In the case that a tail is thrown first we need to throw again.
+Hence, we mulitply the probability to get heads $\frac{1}{2}$ by $x+1$ because we have wasted 1 toss on a diifferent outcome. Effectivley, we repeat the same 
+experiment but from a new point (one flip ahead) and add that to the result.
+  
+It is expected that 2 tirals are required to get a head. We extend the same logic recursively to find the probability to find the number
+of flips for 2 heads in a row.  
+$$
+x= \frac{1}{2}*(x+1) + \frac{1}{4}*(x+2) + \frac{1}{4}*2 \\
+x= \frac{x+1}{2} + \frac{x+2}{4} + \frac{1}{2} \\
+4x= 2x+2 + x+2 + 2 \\
+4x = 3x + 6 \\
+x = 6 
+$$
+
+Where $\frac{1}{2}*(x+1)$ is getting a tail on the next throw. $\frac{1}{4}*(x+2)$ is throwing a head and a tail next, *not a tail and a head*.  
+$\frac{1}{4}*2$ is throwing 2 heads in a row, we do not add to x because no throws are wasted.  
+We can conclude that we expect to need 6 throws to get 2 heads in a row.  
+
+## 4. Value at Risk and Stress Testing
+# Task 1
+
+#1
+```{r}
+unif_d = c()
+vol_d = c()
+sharpe_d = c()
+
+
+for(i in 1:nrow(out_sample)){
+  unif_d = c(unif_d, sum(as.numeric(out_sample[i, 2:28] * unif_weight), na.rm = TRUE))
+  vol_d = c(vol_d, sum(as.numeric(out_sample[i, 2:28] * vol_weight), na.rm = TRUE))
+  sharpe_d = c(sharpe_d, sum(as.numeric(out_sample[i, 2:28] * sharpe_weight), na.rm = TRUE))
+}
+
+unif_m = mean(unif_d)
+unif_s = sd(unif_d)
+vol_m = mean(vol_d)
+vol_s = sd(vol_d)
+sharpe_m = mean(sharpe_d)
+sharpe_s = sd(sharpe_d)
+
+table = matrix(c(unif_m, vol_m, sharpe_m, unif_s, vol_s, sharpe_s), ncol = 3, byrow = TRUE)
+colnames(table) = c("Portfolio 1", "Portfolio 2", "Portfolio 3")
+rownames(table) = c("Mean", "STD")
+table
+```
+
+#2
+```{r}
+
+simGBM <- function(S = 100, DTintervals = 252, mu = 0.1, sig = 0.2, numSims = 1){
+
+   dt <- 1/DTintervals
+   gbmVals <- matrix( rnorm(DTintervals*numSims, dt*(mu - 0.5*sig^2), sig*sqrt(dt)), nrow = DTintervals, ncol = numSims) 
+   gbmVals <- apply(gbmVals, 2, cumsum)
+   sims <- (matrix(S, nrow = DTintervals, ncol = numSims)) *exp(gbmVals)
+   sims <- rbind(c(rep(S, numSims)),sims )
+   return(sims)
+}
+unif_sim = simGBM(100, 252, unif_m, unif_s, 1000)
+vol_sim = simGBM(100, 252, vol_m, vol_s, 1000)
+sharpe_sim = simGBM(100, 252, sharpe_m, sharpe_s, 1000)
+
+hist(unif_sim)
+hist(vol_sim)
+hist(sharpe_sim)
+
+```
+All three portfolio follow normal distribution.
+The second portfolio tends to have a larger tail.
+
+# 3
+```{r}
+mean(unif_sim[253,])
+mean(vol_sim[253,])
+mean(sharpe_sim[253,])
+
+```
+
+#4
+```{r}
+unif_log = diff(log(unif_sim[,5]))[-1]
+vol_log = diff(log(vol_sim[,5]))[-1]
+sharpe_log = diff(log(sharpe_sim[-5]))[-1]
+
+unif_var = (sd(unif_log) * 1.65) -  mean(unif_log) 
+vol_var = (sd(vol_log) * 1.65) - mean(vol_log) 
+sharpe_var = (sd(sharpe_log) * 1.65) - mean(sharpe_log)
+
+var_report = matrix(c(unif_var,vol_var,sharpe_var), ncol = 3, byrow = TRUE)
+colnames(var_report) = c("Portfolio 1", "Portfolio 2", "Portfolio 3")
+rownames(var_report) = "Var(0.05)"
+var_report
+
+```
+#Task 2
+```{r}
+SPY_OUT = getSymbols("SPY", from="2019-01-01", to="2020-12-31", env = NULL)[, 6]
+SPY_log = log(lag(SPY_OUT, -1) / SPY_OUT)[-1]
+SPY_log = SPY_log[-length(SPY_log)]
+SPY_s = sd(SPY_log)
+
+beta_unif = as.numeric(cor(unif_d[-503], SPY_log)) * sd(unif_d)/SPY_s
+beta_vol = as.numeric(cor(sharpe_d[-503], SPY_log)) * sd(unif_d)/SPY_s
+beta_sharpe = as.numeric(cor(sharpe_d[-503], SPY_log)) * sd(unif_d)/SPY_s
+
+
+a = 0.1
+unif_new_s = a * SPY_s * beta_unif
+vol_new_s = a * SPY_s * beta_vol
+sharpe_new_s = a * SPY_s * beta_sharpe
+
+
+unif_new_sim = simGBM(100, 252, unif_m, unif_new_s, 1000)
+vol_new_sim = simGBM(100, 252, vol_m, vol_new_s, 1000)
+sharpe_new_sim = simGBM(100, 252, sharpe_m, sharpe_new_s, 1000)
+
+unif_new_log = diff(log(unif_new_sim[,5]))[-1]
+vol_new_log = diff(log(vol_new_sim[,5]))[-1]
+sharpe_new_log = diff(log(sharpe_new_sim[-5]))[-1]
+
+unif_new_var = (sd(unif_new_log) * 1.65) -  mean(unif_new_log) 
+vol_new_var = (sd(vol_new_log) * 1.65) - mean(vol_new_log) 
+sharpe_new_var = (sd(sharpe_new_log) * 1.65) - mean(sharpe_new_log)
+
+var_new_report = matrix(c(unif_new_var,vol_new_var,sharpe_new_var), ncol = 3, byrow = TRUE)
+colnames(var_new_report) = c("Portfolio 1", "Portfolio 2", "Portfolio 3")
+rownames(var_new_report) = "New Var(0.05)"
+var_new_report
+
+```
+
+## 5. Mean-Variance Efficient Frontier 
+
+#1
+```{r}
+new_returns_data = returns_data[-1][,-1]
+mu = c()
+for (i in (1:27)){
+  mu = c(mu, mean(new_returns_data[,i]))
+}
+mu = mu * sqrt(252)
+
+cov = cov(new_returns_data)
+
+#(a)
+inv_cov = solve(cov)
+one_col = matrix(c(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1))
+one_row = t(one_col)
+w0 = inv_cov %*% one_col / as.numeric(one_row %*% inv_cov %*% one_col)
+
+#(b)
+I = diag(27)
+
+B = inv_cov %*% (I - (one_col %*% t(w0)))
+
+w1 = B %*% mu
+
+#(c)
+mu0 = t(w0) %*% mu
+mu1 = t(w1) %*% mu
+
+
+#(d)
+m = runif(20, mu0, 2 * max(mu))
+Am = c()
+
+for (i in 1:length(m)){
+  Am = c(Am, 1 / ((m[i] - mu0) / mu1))
+}
+
+#(e)
+Opti_port = function(m, mu, cov){
+  inv_cov = solve(cov)
+  one_col = matrix(rep(1, length(mu)))
+  w0 = inv_cov %*% one_col / as.numeric(t(one_col) %*% inv_cov %*% one_col)
+  I = diag(length(mu))
+  B = inv_cov %*% (I - (one_col %*% t(w0)))
+  w1 = B %*% mu
+  mu0 = t(w0) %*% mu
+  mu1 = t(w1) %*% mu
+  Am = 1 / ((m - mu0) / mu1)
+  w = w0 + (as.numeric(1/Am) * w1)
+  sigma = as.numeric(sqrt(t(w) %*% cov %*% w))
+  return(list(m, sigma, c(w)))
+}
+
+#5.1
+input_m = seq(mu0, 2 * max(mu), by = 0.001)
+output_sigma = c()
+for(i in (1:length(input_m))){
+  output_sigma = c(output_sigma, Opti_port(input_m[i], mu, cov)[2])
+}
+
+
+plot(output_sigma, input_m)
+
+```
+
+#5.2
+```{r}
+max_sharpe = which.max(input_m / as.numeric(output_sigma))
+plot(output_sigma, input_m, col=ifelse(input_m %in% c(mu0, input_m[max_sharpe]), 'red', 'black'))
+
+```
+#5.3
+```{r}
+#a
+gmv_w = unlist(Opti_port(mu0, mu, cov)[3])
+sr_w = unlist(Opti_port(input_m[max_sharpe], mu, cov)[3])
+
+lambda = seq(-1, 1, by = 0.1)
+MV_sigma = c()
+
+Opti_port_2 = function(lambda, w_0, w_sr, cov){
+  w = lambda * w_0 + (1-lambda) * w_sr
+  sigma = as.numeric(sqrt(t(w) %*% cov %*% w))
+  return(sigma)
+}
+
+for (i in lambda){
+  MV_sigma = c(MV_sigma, Opti_port_2(i, gmv_w, sr_w, cov))
+}
+
+plot(output_sigma, input_m, col=ifelse(input_m %in% c(mu0, input_m[max_sharpe]), 'red', 'black'))
+par(new = T)
+plot(MV_sigma, lambda, axes = F, type = 'l', col = 'red', xlab = "", ylab = "")
+
+
+
+```
+#b
+  for $\lambda < 0$, investors becom risk seeking instead of risk averse. It may be a good measure for a bubble in the market because it measures greed.
+
+#5.4
+#a
+```{r}
+lambda_2 = seq(0, 1, by = 0.1)
+Opti_port_3 = function(lambda, w_sr, cov){
+  one_col = matrix(rep(1, length(w_sr)))
+  w = lambda + (1-lambda) * w_sr
+  sigma = as.numeric(sqrt(t(w) %*% cov %*% w))
+  return(sigma)
+}
+
+MV_sigma_2 = c()
+
+for (i in lambda_2){
+  MV_sigma_2 = c(MV_sigma_2, Opti_port_3(i, sr_w, cov))
+}
+
+plot(output_sigma, input_m, col=ifelse(input_m %in% c(mu0, input_m[max_sharpe]), 'red', 'black'))
+par(new = T)
+plot(MV_sigma, lambda, axes = F, type = 'l', col = 'red', xlab = "", ylab = "")
+par(new = T)
+plot(MV_sigma_2, lambda_2, axes = F, type = 'l', col = 'blue', xlab = "", ylab = "")
+
+```
+#b
+The intercept is the risk-free asset's return.
+The slope is the max share-ratio.
+
+## Last Bonus Question
+
+$$
+\lambda\omega_0 + (1 - \lambda)\omega_{SR} = \omega_0 + \frac{1}{A_m}B\mu \\
+(\lambda - 1)(\omega_0 - \omega_{SR}) =  \frac{1}{A_m}B\mu \\ 
+\lambda = \frac{B\mu}{A_m(\omega_0 - \omega_{SR})} + 1 \\
+$$
+This should work because B, A, $w_o, w_{SR}$ are all in terms of the covarience matrix. 
+

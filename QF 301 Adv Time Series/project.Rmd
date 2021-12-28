@@ -1,0 +1,69 @@
+---
+title: "QF 301 Project"
+author: "Siddharth Iyer"
+date: "12/1/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, warning=FALSE, message=FALSE}
+library(tidyr)
+
+df = read.csv("train.csv")
+df = df[, 2:length(df)]
+df
+```
+```{r}
+
+
+
+#df$Gender
+
+#df$Gender <- as.numeric(as.factor(df$Gender))
+
+#df["Gender"] = (df["Gender"] == "Male")+0
+#df["Married"] = (df["Married"] == "Yes")+0
+# dependents 
+# Property_Area
+#df["Education"] = (df["Education"] == "Graduate")+0
+#df["Self_Employed"] = (df["Self_Employed"] == "Yes")+0
+# Loan_Status
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

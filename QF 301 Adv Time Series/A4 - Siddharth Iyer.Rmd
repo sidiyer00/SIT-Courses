@@ -1,0 +1,317 @@
+---
+output: pdf_document
+---
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(warning=FALSE, message=FALSE)
+```
+
+
+
+# QF301.  Homework #4.
+
+
+## `r format(Sys.time(), "%Y-%m-%d")`
+
+
+I pledge on my honor that I have not given or received any unauthorized assistance on this assignment/examination. I further pledge that I have not copied any material from a book, article, the Internet or any other source except where I have expressly cited the source.
+
+By filling out the following fields, you are signing this pledge.  No assignment will get credit without being pledged.
+
+Name: Siddharth Iyer
+
+CWID: 10447455
+
+Date: 11/8/2021
+
+
+# Instructions
+In this assignment, you should use R markdown to answer the questions below. Simply type your R code into embedded chunks as shown above.
+When you have completed the assignment, knit the document into a PDF file, and upload both the .pdf and .Rmd files to Canvas.
+```{r}
+CWID = 10447455 #Place here your Campus wide ID number, this will personalize
+#your results, but still maintain the reproducible nature of using seeds.
+#If you ever need to reset the seed in this assignment, use this as your seed
+#Papers that use -1 as this CWID variable will earn 0's so make sure you change
+#this value before you submit your work.
+personal = CWID %% 10000
+set.seed(personal)#You can reset the seed at any time in your code,
+#but please always set it to this seed.
+```
+# Question 1 (40pt)
+
+## Question 1.1
+Use the quantmod package to obtain the daily adjusted close prices 2 different stocks.  You should have at least two years of data for both assets.  You should inspect the dates for your data to make sure you are including everything appropriately.  Create a data frame of the daily log returns both both stocks along with the lagged returns (2 lags).  Also include the direction (positive or negative) for both stocks in the current time point (not lagged).  You may wish to remove the date from your data frame for later analysis. Print the first 6 lines of your data frame.  (You may use the same two stocks as in Homework 2 or 3.)
+
+## \textcolor{red}{Solution:} 
+```{r, warning=FALSE, message=FALSE}
+library(quantmod)
+stocks = c("AAPL", "AMD")
+getSymbols(stocks, from="2018-01-01", to="2021-10-14")
+AAPL = AAPL$AAPL.Adjusted
+AMD = AMD$AMD.Adjusted
+
+aapl_log_rets = dailyReturn(AAPL, type="log")[-1]
+amd_log_rets = dailyReturn(AMD, type="log")[-1]
+
+aapl_l0 = aapl_log_rets[-2:-1]
+aapl_l1 = as.numeric(stats::lag(aapl_log_rets,k=1))[-2:-1]
+aapl_l2 = as.numeric(stats::lag(aapl_log_rets,k=2))[-2:-1]
+aapl_dir = (aapl_l0>0)+0
+amd_l0 = amd_log_rets[-2:-1]
+amd_l1 = as.numeric(stats::lag(amd_log_rets,k=1))[-2:-1]
+amd_l2 = as.numeric(stats::lag(amd_log_rets,k=2))[-2:-1]
+amd_dir = (amd_l0>0)+0
+
+
+lagged_df = data.frame(aapl_l0, aapl_l1, aapl_l2, aapl_dir, amd_l0, amd_l1, amd_l2, amd_dir)
+colnames(lagged_df) <- c("aapl_l0", "aapl_l1", "aapl_l2", "aapl_dir", "amd_l0", "amd_l1", "amd_l2", "amd_dir")
+head(lagged_df)
+```
+
+
+
+## Question 1.2 
+Split your data into training and testing sets (80% training and 20% test).
+
+Run a logistic regression for the direction of one of your stock returns as a function of the lagged returns (2 lags) for both stocks.  This should be of the form $\log(p_{1,t}/(1-p_{1,t})) = \beta_0 + \beta_{1,1} r_{1,t-1} + \beta_{1,2} r_{1,t-2} + \beta_{2,1} r_{2,t-1} + \beta_{2,2} r_{2,t-2}$.
+Evaluate the performance of this model with the test accuracy and confusion matrix.
+
+## \textcolor{red}{Solution:} 
+```{r}
+# split into train and test samples
+N <- nrow(lagged_df)
+train = sample(N, N*.8, replace = FALSE)
+
+logistic.reg = glm(aapl_dir~aapl_l1+aapl_l2+amd_l1+amd_l2 , data=lagged_df , family=binomial, subset = train) # Fit logistic regression [family=binomial]
+summary(logistic.reg)
+coef(logistic.reg)
+summary(logistic.reg)$coef
+logistic.probs=predict(logistic.reg,type="response") # Predict the probability for direction on training data
+
+logistic.probs.test = predict(logistic.reg , newdata=lagged_df[-train, ], type="response") # Compute probabilities
+
+# Use probabilities to make predictions
+y.logistic.pred=rep(0,190) # Create repeated vector of "0"
+y.logistic.pred[logistic.probs.test>.5] = 1 # Predict "1" if logistic regression gives greater probability to "1"
+
+# Evaluate the accuracy
+#table(y.logistic.pred , lagged_df$aapl_l0[-train]) # Confusion matrix of results
+
+logistic.acc = mean(y.logistic.pred==lagged_df$aapl_l0[-train]) # Directly compute the accuracy
+logistic.acc
+```
+
+
+
+## Question 1.3
+Consider the same classification problem as in Question 1.2 but with a Naive Bayes classifier.
+Use the same train/test split as in Question 1.2.
+Evaluate the performance of this model with the test accuracy and confusion matrix.
+
+## \textcolor{red}{Solution:} 
+```{r}
+library("e1071")
+nb = naiveBayes(aapl_dir~aapl_l1+aapl_l2+amd_l1+amd_l2, data=lagged_df, subset=train)
+
+y.nb.prob = predict(nb , newdata=lagged_df[-train, ] , type="raw") # Compute probabilities
+y.nb.pred = (y.nb.prob[,1] < y.nb.prob[,2])+0 # 1st column is "0", 2nd column is "1"
+
+# Evaluate the accuracy
+nb.acc = mean(y.nb.pred==lagged_df$aapl_dir[-train]) # Directly compute the accuracy
+nb.acc
+
+table(y.nb.pred , lagged_df$aapl_dir[-train])
+
+```
+
+
+
+## Question 1.4
+Consider the same classification problem as in Question 1.2 but with a Random Forest classifier with 300 trees and 2 predictors in each tree.
+Use the same train/test split as in Question 1.2.
+Evaluate the performance of this model with the test accuracy and confusion matrix.
+
+## \textcolor{red}{Solution:} 
+```{r, warning=FALSE, message=FALSE}
+library(randomForest)
+rf = randomForest(aapl_dir~aapl_l1+aapl_l2+amd_l1+amd_l2, data=lagged_df, subset=train, ntree=300, mtry=2)
+y.pred.rf = predict(rf, lagged_df[-train,])
+rf.MSE = mean((y.pred.rf - lagged_df$aapl_l0[-train])^2)
+rf.MSE
+```
+
+
+## Question 1.5
+Consider the same classification problem as in Question 1.2 but with a neural network of your own design with at least 1 hidden layer and at least 3 hidden nodes.
+Use the same train/test split as in Question 1.2.
+Evaluate the performance of this model with the test accuracy and confusion matrix.
+
+## \textcolor{red}{Solution:} 
+```{r}
+library(keras)
+
+df1 = lagged_df[c("aapl_dir", "aapl_l0", "aapl_l1", "aapl_l2", "amd_l1", "amd_l2")]
+rownames(df1) <- NULL
+  
+nn.reg = keras_model_sequential() %>% # Creating a model can sometimes take a bit of time
+  layer_flatten(input_shape = c(4)) %>%
+  layer_dense(units = 3, activation = "relu") %>%
+  layer_dense(1 , activation = "linear")
+
+nn.reg %>% # State the loss function and optimizer (adam is a good choice usually)
+  compile(
+    loss = "mean_squared_error",
+    optimizer = "adam"
+  )
+
+```
+
+```{r}
+
+```
+
+
+## Question 1.6
+Consider the same classification problem as in Question 1.2 but with a support vector machine using a radial basis kernel.
+Use the same train/test split as in Question 1.2.
+Evaluate the performance of this model with the test accuracy and confusion matrix.
+
+## \textcolor{red}{Solution:} 
+```{r}
+svm.model = svm(aapl_dir~aapl_l1+aapl_l2+amd_l1+amd_l2, data=lagged_df,kernal="tradial", subset = train)
+summary(svm.model)
+names(svm.model)
+
+svm.pred=predict(svm.model,newdata = lagged_df[-train, ])
+table(predict=svm.pred,truth=lagged_df$aapl_dir[-train]) #Confusion matrix with manually given names
+mean((svm.pred==lagged_df$aapl_dir))
+
+```
+
+
+# Question 2 (10pt)
+## Question 2.1
+Of the methods considered in Question 1, which would you recommend in practice?
+Explain briefly (1 paragraph) why you choose this fit.
+
+## \textcolor{red}{Solution:} 
+
+Naive Bayes is fast, has the highest accuracy, and is one of the leaset complex models we have implemented. 
+
+
+# Question 3 (40pt)
+
+## Question 3.1
+Using the same data as in Question 1.1, partition the predicted (current) stock returns into 5 possible "market directions".  Add this data to your data frame and print the first 6 lines.
+Briefly (2-3 sentences) justify the choices of cutoff levels for the partitioning.
+
+## \textcolor{red}{Solution:}
+
+```{r}
+direction = rep("Bear",length(lagged_df$aapl_dir))
+quantile(lagged_df$aapl_l0,c(1/5,2/5,3/5,4/5))
+direction[lagged_df$aapl_l0 > quantile(lagged_df$aapl_l0,1/5)] = "Down"
+direction[lagged_df$aapl_l0 > quantile(lagged_df$aapl_l0,2/5)] = "Flat"
+direction[lagged_df$aapl_l0 > quantile(lagged_df$aapl_l0,3/5)] = "Up"
+direction[lagged_df$aapl_l0 > quantile(lagged_df$aapl_l0,4/5)] = "Bull"
+
+# Check how well this actually splits data:
+sum(direction == "Bear")
+sum(direction == "Down")
+sum(direction == "Flat")
+sum(direction == "Up")
+sum(direction == "Bull")
+
+```
+
+I partitioned them into bear, down, flat, up, bull markets...this is just easiest because normal distribution will take more time. 
+
+
+
+## Question 3.2
+Run a logistic regression for the generalized directions produced in Question 1.1 of one of your stock returns as a function of the lagged returns (2 lags) for both stocks.  
+Use the same train/test split as in Question 1.2.
+Evaluate the performance of this model with the test accuracy and confusion matrix.
+
+## \textcolor{red}{Solution:}
+
+```{r}
+library(nnet)
+df.multiclass = data.frame(direction = as.factor(direction), lagged_df$aapl_l1, lagged_df$aapl_l2, lagged_df$amd_l1, lagged_df$amd_l2)
+
+logistic.reg.new = multinom(direction ~ . , data=df.multiclass , subset = train)
+
+# Let's classify all our test points
+y.logistic.pred.new = predict(logistic.reg.new , newdata = df.multiclass[-train,])
+
+# Consider the accuracy
+logistic.acc.new = mean(y.logistic.pred.new==direction[-train]) # Directly compute the accuracy
+logistic.acc.new
+
+table(y.logistic.pred.new , direction[-train]) # Confusion matrix of results
+```
+
+I don't understand this graph at all. 
+
+
+## Question 3.3
+Consider the same classification problem as in Question 3.2 but with a Naive Bayes classifier.
+Use the same train/test split as in Question 1.2.
+Evaluate the performance of this model with the test accuracy and confusion matrix.
+
+## \textcolor{red}{Solution:}
+
+```{r}
+# Enter your R code here!
+```
+
+
+## Question 3.4
+Consider the same classification problem as in Question 3.2 but with a Random Forest classifier with 300 trees and 2 predictors in each tree.
+Use the same train/test split as in Question 1.2.
+Evaluate the performance of this model with the test accuracy and confusion matrix.
+
+## \textcolor{red}{Solution:}
+
+```{r}
+# Enter your R code here!
+```
+
+
+
+## Question 3.5
+Consider the same classification problem as in Question 3.2 but with a neural network of your own design with at least 1 hidden layer and at least 3 hidden nodes.
+Use the same train/test split as in Question 1.2.
+Evaluate the performance of this model with the test accuracy and confusion matrix.
+
+## \textcolor{red}{Solution:}
+
+```{r}
+# Enter your R code here!
+```
+
+
+
+## Question 3.6
+Consider the same classification problem as in Question 3.2 but with a support vector machine using a radial basis kernel.
+Use the same train/test split as in Question 1.2.
+Evaluate the performance of this model with the test accuracy and confusion matrix.
+
+## \textcolor{red}{Solution:}
+
+```{r}
+# Enter your R code here!
+```
+
+
+
+
+# Question 4 (10pt)
+## Question 4.1
+Of the methods considered in Question 3, which would you recommend in practice?
+Explain briefly (1 paragraph) why you choose this fit.
+
+## \textcolor{red}{Solution:} 
+
+

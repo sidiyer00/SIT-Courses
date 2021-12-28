@@ -1,0 +1,228 @@
+---
+output: pdf_document
+
+---
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(warning=FALSE, message=FALSE)
+```
+
+# QF301.  Lecture 19 In-Class Assignment.
+
+
+## `r format(Sys.time(), "%Y-%m-%d")`
+
+I pledge on my honor that I have not given or received any unauthorized assistance on this assignment/examination. I further pledge that I have not copied any material from a book, article, the Internet or any other source except where I have expressly cited the source.
+
+By filling out the following fields, you are signing this pledge.  No assignment will get credit without being pledged.
+
+Name: Siddharth Iyer
+
+CWID: 10447455
+
+Date: 11/8/2021
+
+# Question 1 (45pt)
+
+## Question 1.1
+```{r}
+CWID = 10447455 #Place here your Campus wide ID number, this will personalize
+#your results, but still maintain the reproduceable nature of using seeds.
+#If you ever need to reset the seed in this assignment, use this as your seed
+#Papers that use -1 as this CWID variable will earn 0's so make sure you change
+#this value before you submit your work.
+personal = CWID %% 10000
+set.seed(personal)
+```
+Obtain the adjusted close prices and daily log returns for 20 different stocks from January 1, 2010 until December 31, 2019.
+Save these prices and returns into data frames. Print the first 6 lines of each data frame.
+
+## \textcolor{red}{Solution:} 
+
+```{r, warning=FALSE}
+stocks = c("MMM", "ABT", "AMD", "AAP", "AFL", "GOOG", "AMZN", "AAL", "AXP", "FDX", "AAPL", "T", "BBY", "BLK", "BK", "COF", "CMG", "C", "COST", "DPZ")
+
+library(quantmod)
+
+for(stock in stocks){
+  getSymbols(stock, from="2010-01-01", to="2019-12-31", src="yahoo")
+}
+
+price_df = data.frame(MMM$MMM.Adjusted, ABT$ABT.Adjusted, AMD$AMD.Adjusted,
+                    AAP$AAP.Adjusted, AFL$AFL.Adjusted, GOOG$GOOG.Adjusted,
+                    AMZN$AMZN.Adjusted, AAL$AAL.Adjusted, AXP$AXP.Adjusted, 
+                    FDX$FDX.Adjusted, AAPL$AAPL.Adjusted, T$T.Adjusted, 
+                    BBY$BBY.Adjusted, BLK$BLK.Adjusted, BK$BK.Adjusted,
+                    COF$COF.Adjusted, CMG$CMG.Adjusted, C$C.Adjusted, 
+                    COST$COST.Adjusted, DPZ$DPZ.Adjusted)
+colnames(price_df) <- stocks
+rets_df = log(price_df[-1,]/price_df[-length(price_df),])
+                    
+head(price_df)
+head(rets_df)
+```
+
+
+## Question 1.2
+Cluster these stocks based on the adjusted close prices.  
+Use K-Means Clustering with 4 clusters and 20 attempts at clustering
+Print the clusters. Do these match with market sectors?
+
+## \textcolor{red}{Solution:}
+
+```{r}
+km.equity = kmeans(t(price_df),4,nstart=20)
+sort(km.equity$cluster)
+```
+CMG: Consumer Discretionary
+
+MMM: Industrial
+AAP: Consumer Discretionary
+FDX: Industrial
+BLK: Financials
+COST: Consumer Staples
+DPZ: Consumer Discretionary
+
+ABT: Health Care
+AMD: IT
+AFL: Financials
+AAL: Industrial
+AXP: Financials
+AAPL: IT
+T: Communication Services
+BBY: Consumer Discretionary
+BK: Financials
+COF: Financials
+C: Financials
+
+GOOG: Communication Services
+AMZN: Consumer Discretionary
+
+There doesn't seem to be a clustering based on sector according to this dataset. 
+
+
+## Question 1.3
+Repeat Question 1.2 but normalize the adjusted close prices first.
+How do your clusters differ (if at all)?
+
+## \textcolor{red}{Solution:}
+
+```{r}
+km.equity.scaled = kmeans(t(scale(price_df)),4,nstart=20)
+sort(km.equity.scaled$cluster)
+```
+1 - Consumer Discretionary
+2 - Financials + Discretionary products (I'd say this is growth cluster)
+3 - I'd say this is Industrial + large asset financials that are correlated with industrial
+
+## Question 1.4
+Repeat Question 1.2 but with the log returns.
+How do your clusters differ (if at all)? 
+
+## \textcolor{red}{Solution:}
+
+```{r}
+km.logrets = kmeans(t(rets_df),4,nstart=20)
+sort(km.logrets$cluster)
+```
+
+The clusters appear to be even worse now...there is almost to sector classification. See above for ticker industries. 
+
+
+## Question 1.5
+Repeat Question 1.4 but normalize the the log returns first.
+How do your clusters differ (if at all)?
+
+## \textcolor{red}{Solution:}
+
+```{r}
+km.logrets.scaled = kmeans(t(scale(rets_df)),4,nstart=20)
+sort(km.logrets.scaled$cluster)
+```
+Yes, the cluster has changed.
+1 - No apparent cluster based on industry. 
+2 - No apparent cluster based on industry. 
+3 - No pure cluster based on indstury. 
+
+## Question 1.6
+Do any of the clusters considered with the K-Means Clustering algorithm seem to match your intuition best?
+Briefly (2-3 sentences) comment.
+
+## \textcolor{red}{Solution:}
+
+Scaled price seems to do the best...it doesn't classify purely by industry, but it does somehow get the growth clusters vs industrial/large asset financial clusters. All of them are still incredibly bad and shouldn't be used in a real-world analysis. 
+
+# Question 2 (45 pt)
+
+## Question 2.1
+Cluster these stocks based on the adjusted close prices.  
+Use Hierarchical Clustering with Complete Distance Metric.
+Print the dendrogram.
+Print the clusters when cut at 4 clusters.
+Do these match with market sectors?
+
+## \textcolor{red}{Solution:}
+
+```{r}
+hc.complete=hclust(dist(t(price_df)),method="complete") 
+plot(hc.complete,main="Complete Linkage",cex=.9)
+```
+
+## Question 2.2
+Repeat Question 2.1 but normalize the adjusted close prices first.
+How do your clusters differ (if at all)?
+
+## \textcolor{red}{Solution:}
+
+```{r}
+hc.complete.scaled=hclust(dist(t(scale(price_df))),method="complete") 
+plot(hc.complete.scaled,main="Complete Linkage",cex=.9)
+```
+They are much more different...the scaled data eliminates some of the clusters previously identified. The financials, consumer discretionary, and IT are grouped together, which grow during expansion cycles...this might be good. 
+
+
+
+## Question 2.3
+Repeat Question 2.1 but with the log returns.
+How do your clusters differ (if at all)? 
+
+## \textcolor{red}{Solution:}
+
+```{r}
+hc.complete.rets=hclust(dist(t(rets_df)),method="complete") 
+plot(hc.complete.rets,main="Complete Linkage",cex=.9)
+```
+Heavily tiered, which means there is a lot of node impurity in this model. 
+
+
+## Question 2.4
+Repeat Question 2.3 but normalize the the log returns first.
+How do your clusters differ (if at all)?
+
+## \textcolor{red}{Solution:}
+
+```{r}
+hc.complete.lognorm=hclust(dist(t(scale(rets_df))),method="complete") 
+plot(hc.complete.lognorm,main="Complete Linkage",cex=.9)
+```
+very good clustering of IT stocks..AMZN, GOOG, AMD, AAPL. Further, industrial and financial stocks are well grouped together, although they eventually fall into the same cluster, which is undesirable
+
+
+## Question 2.5
+Do any of the clusters considered with the Hierarchical Clustering algorithm seem to match your intuition best?
+Briefly (2-3 sentences) comment.
+
+## \textcolor{red}{Solution:}
+The last model, scaled returns, provides very good clustering of IT stocks..AMZN, GOOG, AMD, AAPL. Further, industrial and financial stocks are well grouped together, although they eventually fall into the same cluster, which is undesirable.
+
+
+# Question 3 (10pt)
+Briefly (2-3 sentences) comment on if you prefer K-Means or Hierarchical clustering on your data.
+
+## \textcolor{red}{Solution:}
+
+
+I strongly prefer Hierarchical clustering because it clearly shows intermediate classifications that contributed to the result. Also, this doesn't suffer from as much dimensionality issues as K-Means. 
+
+
+

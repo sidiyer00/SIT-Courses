@@ -1,0 +1,179 @@
+---
+output: pdf_document
+---
+
+```{r global_options, include=FALSE, warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(warning=FALSE, message=FALSE)
+```
+
+
+
+# QF301.  Homework #3.
+
+
+## `r format(Sys.time(), "%Y-%m-%d")`
+
+
+I pledge on my honor that I have not given or received any unauthorized assistance on this assignment/examination. I further pledge that I have not copied any material from a book, article, the Internet or any other source except where I have expressly cited the source.
+
+By filling out the following fields, you are signing this pledge.  No assignment will get credit without being pledged.
+
+Name: Siddharth Iyer
+
+CWID: 10447455
+
+Date: 10/13/2021
+
+
+# Instructions
+In this assignment, you should use R markdown to answer the questions below. Simply type your R code into embedded chunks as shown above.
+When you have completed the assignment, knit the document into a PDF file, and upload both the .pdf and .Rmd files to Canvas.
+```{r}
+CWID = 10447455 #Place here your Campus wide ID number, this will personalize
+#your results, but still maintain the reproducible nature of using seeds.
+#If you ever need to reset the seed in this assignment, use this as your seed
+#Papers that use -1 as this CWID variable will earn 0's so make sure you change
+#this value before you submit your work.
+personal = CWID %% 10000
+set.seed(personal)#You can reset the seed at any time in your code,
+#but please always set it to this seed.
+```
+# Question 1 (20pt)
+
+## Question 1.1
+Use the quantmod package to obtain the daily adjusted close prices 2 different stocks.  You should have at least two years of data for both assets.  You should inspect the dates for your data to make sure you are including everything appropriately.  Create a data frame of the daily log returns both both stocks along with the lagged returns (2 lags).  You may wish to remove the date from your data frame for later analysis. Print the first 6 lines of your data frame.  (You may use the same two stocks as in Homework 2.)
+
+## \textcolor{red}{Solution:} 
+```{r}
+library(quantmod)
+stocks = c("AAPL", "AMD")
+getSymbols(stocks, from="2018-01-01", to="2021-10-14")
+AAPL = AAPL$AAPL.Adjusted
+AMD = AMD$AMD.Adjusted
+
+aapl_log_rets = dailyReturn(AAPL, type="log")[-1]
+amd_log_rets = dailyReturn(AMD, type="log")[-1]
+
+aapl_l0 = aapl_log_rets[-2:-1]
+aapl_l1 = as.numeric(stats::lag(aapl_log_rets,k=1))[-2:-1]
+aapl_l2 = as.numeric(stats::lag(aapl_log_rets,k=2))[-2:-1]
+amd_l0 = amd_log_rets[-2:-1]
+amd_l1 = as.numeric(stats::lag(amd_log_rets,k=1))[-2:-1]
+amd_l2 = as.numeric(stats::lag(amd_log_rets,k=2))[-2:-1]
+
+lagged_df = data.frame(aapl_l0, aapl_l1, aapl_l2, amd_l0, amd_l1, amd_l2)
+colnames(lagged_df) <- c("aapl_l0", "aapl_l1", "aapl_l2", "amd_l0", "amd_l1", "amd_l2")
+head(lagged_df)
+```
+
+## Question 1.2 
+Split your data into training and testing sets (80% training and 20% test).
+
+Linearly regress one of your stock returns as a function of the lagged returns (2 lags) for both stocks.
+This should be of the form $r_{1,t} = \beta_0 + \beta_{1,1} r_{1,t-1} + \beta_{1,2} r_{1,t-2} + \beta_{2,1} r_{2,t-1} + \beta_{2,2} r_{2,t-2}$.
+Evaluate the performance of this model with the mean squared error on the test data.
+
+## \textcolor{red}{Solution:} 
+```{r, warning=FALSE}
+# split into train and test samples
+N <- nrow(lagged_df)
+train = sample(N, N*.8, replace = FALSE)
+
+# training multi-linear model
+lagged.lin.reg <- lm(aapl_l0~aapl_l1+aapl_l2+amd_l1+amd_l2, lagged_df, subset=train)
+
+# train MSE
+cat("Train MSE: ", mean((lagged_df$aapl_l0[train]-predict(lagged.lin.reg, lagged_df[train,]))^2), "\n")
+# test MSE
+cat("Test MSE: ", mean((lagged_df$aapl_l0[-train]-predict(lagged.lin.reg, lagged_df[-train,]))^2), "\n")
+```
+
+# Question 2 (35pt)
+
+## Question 2.1
+Using the same data, train/test split, and consider the same regression problem as in Question 1.2. Create a feed-forward neural network with a single hidden layer (2 hidden nodes) densely connected to the inputs. You may choose any activation functions you wish.
+
+### Question 2.1.1
+Write the mathematical structure for this neural network.  
+
+### \textcolor{red}{Solution:}
+
+$y = f^{(2)}(f^{(1)}_1(x_1, x_2, x_3, x_4, \beta^{(1)}_1), f^{(1)}_2(x_1, x_2, x_3, x_4, \beta^{(1)}_2),\beta^{(2)})$
+
+
+### Question 2.1.2
+Train this neural network on the training data.  
+Evaluate the performance of this model with the mean squared error on the test data.
+
+### \textcolor{red}{Solution:} 
+```{r, warning=FALSE}
+library(tensorflow)
+library(keras)
+nn.reg = keras_model_sequential() %>% # Creating a model can sometimes take a bit of time
+  layer_flatten(input_shape = c(4)) %>%
+  layer_dense(units = 2, activation = "relu") %>%
+  layer_dense(1 , activation = "linear")
+
+summary(nn.reg)
+
+```
+
+
+## Question 2.2
+Using the same train/test split and consider the same regression problem as in Question 1.2.
+Train and test another neural network of your own design.
+
+## \textcolor{red}{Solution:} 
+```{r}
+#insert r code here
+```
+
+
+## Question 2.3
+How would you determine if your models are overfitting the data? 
+Do you suspect this is happening in your models?
+
+## \textcolor{red}{Solution:} 
+
+
+
+
+# Question 3 (35pt)
+## Question 3.1
+Using the same data, train/test split, and consider the same regression problem as in Question 1.2.
+Train a decision tree on the training data.
+Evaluate the performance of this model with the mean squared error on the test data.
+
+## \textcolor{red}{Solution:} 
+```{r}
+#insert r code here
+```
+
+
+## Question 3.2
+Using the same train/test split and consider the same regression problem as in Question 1.2.
+Train and test a random forest with 250 trees and 2 predictors.
+
+## \textcolor{red}{Solution:} 
+```{r}
+#insert r code here
+```
+
+
+## Question 3.3
+How would you determine if your models are overfitting the data? 
+Do you suspect this is happening in either the decision tree or random forest?
+
+## \textcolor{red}{Solution:} 
+
+
+
+# Question 4 (10pt)
+## Question 4.1
+Consider the same regression problem as in Question 1.2.
+Of the methods considered in this assignment, which would you recommend in practice?
+Explain briefly (1 paragraph) why you choose this fit.
+
+## \textcolor{red}{Solution:} 
+
+

@@ -1,0 +1,150 @@
+---
+output: pdf_document
+
+---
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(warning=FALSE, message=FALSE)
+```
+
+
+
+# QF301.  Lecture 5 In-Class Assignment.
+
+
+## `r format(Sys.time(), "%Y-%m-%d")`
+
+I pledge on my honor that I have not given or received any unauthorized assistance on this assignment/examination. I further pledge that I have not copied any material from a book, article, the Internet or any other source except where I have expressly cited the source.
+
+By filling out the following fields, you are signing this pledge.  No assignment will get credit without being pledged.
+
+Name: Siddharth Iyer
+
+CWID: 10447455
+
+Date: 9/24/2021
+
+# Question 1 (100pt)
+
+## Question 1.1
+```{r}
+CWID = 10447455 #Place here your Campus wide ID number, this will personalize
+#your results, but still maintain the reproduceable nature of using seeds.
+#If you ever need to reset the seed in this assignment, use this as your seed
+#Papers that use -1 as this CWID variable will earn 0's so make sure you change
+#this value before you submit your work.
+personal = CWID %% 10000
+set.seed(personal)
+```
+Obtain the daily log returns for IBM from January 1, 2010 until December 31, 2019.
+Plot these returns.
+
+## \textcolor{red}{Solution:} 
+
+```{r}
+library(quantmod)
+getSymbols(c("IBM"), from="2010-01-01", to = "2019-12-31")
+IBM = IBM$IBM.Adjusted
+ibm_rets = dailyReturn(IBM)[2:nrow(IBM)]
+ibm_rets = ibm_rets[-1]
+plot(ibm_rets)
+```
+
+
+## Question 1.2
+Create a data frame consisting of 1 day lagged returns (and current returns).
+
+## \textcolor{red}{Solution:}
+
+```{r}
+r1 = as.numeric(lag(ibm_rets,k=1))[-1]
+r0 = as.numeric(ibm_rets)[-1]
+df = data.frame(r0, r1)
+```
+
+
+## Question 1.3
+Split your data into a training set and a testing set (75% in training set). 
+Create an AR(1) model for your stock returns. Provide the test mean squared error.
+
+## \textcolor{red}{Solution:}
+
+```{r}
+train=sample(length(r0),length(r0)*3/4,replace=FALSE)   # rows for training set
+
+ar1 = glm(r0~.,data=df,subset=train)
+
+pred=predict(ar1,df[-train,])   # test set prediction
+MSE = mean((pred-df$r0[-train])^2)   #Test MSE
+cat("Test MSE (AR): ", MSE, "\n")
+
+#Compare with naive/constant predictor:
+MSE0 = mean((mean(df$r0[train])-df$r0[-train])^2) #Test MSE
+cat("Test MSE (Base): ", MSE0, "\n")
+```
+
+
+## Question 1.4
+Evaluate if your AR(1) model is weakly stationary or unit-root nonstationary.
+
+## \textcolor{red}{Solution:} 
+
+```{r}
+#Check coefficients/check unit-root nonstationary
+summary(ar1)$coefficients
+b0 = summary(ar1)$coefficients[1,1]
+b1 = summary(ar1)$coefficients[2,1]
+b1.se = summary(ar1)$coefficients[2,2]
+abs(b1) < 1 #If true then suspect weakly stationary
+
+#Test for unit-root nonstationary
+t = (b1 - 1)/b1.se
+t
+pnorm(t) #Large enough data, treat as normal
+#If small enough then reject the null hypothesis
+```
+This time series is very likely weakly stationary because it has a very low p-value. 
+
+
+## Question 1.5
+If your model is weakly stationary, provide the (long-run) average returns and (first 5) autocovariances for your model. How do these compare with the empirical values? If your model is (unit-root) nonstationary, please interpret your model.  Give as much detail as possible.
+
+### \textcolor{red}{Solution:} 
+
+```{r}
+cat("Annualized Average Log-returns: ", mean(ibm_rets)*252, "\n")
+
+#Forecasting:
+N = length(df$r0)
+sig = sqrt(MSE)
+hat_r = matrix(nrow=length(df$r0)-5,ncol=5)
+e = matrix(nrow=N-5,ncol=5)
+var_e = rep(NA, 5)
+
+hat_r[,1] = b0 + b1*df$r0[1:(N-5)]
+e[,1] = df$r0[2:(N-4)] - hat_r[,1]
+var_e[1] = sig^2
+for (l in seq(2,5)) {
+  hat_r[,l] = b0 + b1*hat_r[,l-1]
+  e[,l] = df$r0[(l+1):(N-5+l)]
+  var_e[l] = sig^2 + b1^2*var_e[l-1] #Why is this the correct equation?
+}
+
+#Compare empirical and theoretical forecast standard deviation
+cat("Theoretical Std: ", sqrt(var_e), "\n")
+emp_e = c(var(e[,1]),var(e[,2]),var(e[,3]),var(e[,4]),var(e[,5]))
+cat("Empirical Std: ", sqrt(emp_e), "\n")
+#How well does the empirical forecast follow the theoretical formulation:
+cat("Empirical vs Theoretical: ", sqrt(emp_e[2]) - sqrt((1+b1^2)*emp_e[1]), "\n")
+cat("Empirical vs Theoretical: ", sqrt(emp_e[3]) - sqrt((1+b1^2)*emp_e[2]), "\n")
+cat("Empirical vs Theoretical: ", sqrt(emp_e[4]) - sqrt((1+b1^2)*emp_e[3]), "\n")
+cat("Empirical vs Theoretical: ", sqrt(emp_e[5]) - sqrt((1+b1^2)*emp_e[4]), "\n")
+
+
+emp_e - var_e
+```
+
+ The theoretical values are very close to the actual values, but were a bit smaller. The difference between empirical and predicted next empirical grows suddenly at the 5th autocovarience. The difference between emp_e and var_e remain pretty constant over time at ~ 3.4e-06.
+ 
+
+
