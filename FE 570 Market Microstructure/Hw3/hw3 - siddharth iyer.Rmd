@@ -1,0 +1,156 @@
+---
+title: "Homework 3 - FE 570"
+author: "Siddharth Iyer"
+date: "3/30/2022"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Packages
+```{r, warning=FALSE, message=FALSE}
+library(xts)
+library(highfrequency)
+```
+
+Load Dataset
+```{r}
+# load the TAQ dataset
+Sys.setenv(TZ = "GMT") # work in East Coast Time Zone
+options(digits.secs=3)
+load("sampleTQdata.RData")
+```
+
+Problem 3.1.1: Calibrate Roll Model 
+```{r, warning=FALSE, message=FALSE}
+# Calibrate the Roll model on the tqdata
+pr <- as.numeric(tqdata$PRICE)
+dpr <- diff(pr)  # Delta price
+acpr <- acf(dpr, lag.max=20, type="correlation", 
+            plot=TRUE, main="Autocorrelation")
+
+# acf: both autocorrelation and autocovariance
+
+plot(acpr, col="red", lag.max=20, 
+     main="Autocorrelation of price changes")
+
+# Roll estimate of bid-ask spread
+
+covpr <- acf(dpr, lag.max=20, type="covariance", plot=FALSE)
+
+gamma0 <- sd(dpr)^2
+#print(gamma0)
+
+gamma0alt <- covpr$acf[1]
+#print(gamma0alt)
+
+gamma1 <- covpr$acf[2]
+#print(gamma1)
+
+cparam.1 <- sqrt(-covpr$acf[2])
+cat("bid-ask spread (2*c): ", 2*cparam.1, "\n")
+
+sig2u <- gamma0 + 2* gamma1
+sigu.1 <- sqrt(sig2u)
+cat("sigma: ", sigu.1, "\n")
+
+```
+
+Problem 3.1.2: Calibrate Roll Model with log(pt)
+```{r, warning=FALSE, message=FALSE}
+# Calibrate the Roll model on the tqdata
+pr <- as.numeric(tqdata$PRICE)
+log_pr <- log(pr)
+dpr <- diff(log_pr)  # Delta price
+acpr <- acf(dpr, lag.max=20, type="correlation", 
+            plot=TRUE, main="Autocorrelation")
+
+# acf: both autocorrelation and autocovariance
+
+plot(acpr, col="red", lag.max=20, 
+     main="Autocorrelation of price changes")
+
+# Roll estimate of bid-ask spread
+
+covpr <- acf(dpr, lag.max=20, type="covariance", plot=FALSE)
+
+gamma0 <- sd(dpr)^2
+#print(gamma0)
+
+gamma0alt <- covpr$acf[1]
+#print(gamma0alt)
+
+gamma1 <- covpr$acf[2]
+#print(gamma1)
+
+cparam.2 <- sqrt(-covpr$acf[2])
+cat("bid-ask spread (2*c): ", 2*cparam.2, "\n")
+
+sig2u <- gamma0 + 2* gamma1
+sigu.2 <- sqrt(sig2u)
+cat("sigma: ", sigu.2, "\n")
+
+```
+When we are using log(price) and applying diff on the datasets, we are effectively taking the spread on returns data. I don't this this makes much sense. 
+
+
+Problem 3.1.3
+```{r}
+realizedVar <- function(q){
+  pr <- as.numeric(tqdata$PRICE)
+  rCov(diff(pr, lag=q, differences=1)/q)
+}
+# compute the signature plot sigma.day(q) = sqrt(RV(q))
+sig_data <- NULL
+
+for(q in 1:100){
+  sig_data <- c(sig_data, sqrt(realizedVar(q)))
+}
+
+plot(sig_data, type ="l", main="Signature plot")
+```
+
+We can see that as the sampling interval decreases, the realizedVol goes to 0 because it all cancels out. This makes sense because the volatility is normally distributed around mean, so the with more data being smoothed by the resample, the closer the realizedVol will be to 0.  
+
+This code is taken from the lectures. 
+
+
+Problem 3.1.4
+```{r}
+n_trades = length(tqdata)
+q_5min = n_trades*5/390
+cat("Realized Var: ", q_5min*realizedVar(q_5min), "\n")
+
+sig_roll = sqrt(n_trades * (sigu.1)^2)
+cat("Roll: ", sig_roll, "\n")
+
+```
+
+Incredible! The Roll model and the Realized volatility is approximately the same at a log of 5 minutes. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,14 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(xts)
+library(highfrequency)
+```
+
+```{r, warning=FALSE, message=FALSE}
+load("taqdata_JPM_20210113_ESTMktHrs.RData")
+```
+
