@@ -1,0 +1,166 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+Load the data and filter for trades in ADF exchange only
+
+```{r message=FALSE, warning=FALSE}
+# Libraries
+library(xts)
+library(highfrequency)
+library(quantmod)
+library(stats)
+library(ggplot2)
+
+
+Sys.setenv(TZ = "EST")  # dataset is timestamped in GMT
+options(digits.secs=3)
+
+# Load Data
+load("taqdata_KO_20220301EX.RData")
+
+# List of exchanges
+exchanges = unique(tqdata$EX)
+
+# Filter trades only in Exchange: ADF
+tqdata_adf = tqdata[tqdata$EX == "ADF"]
+tqdata_bat = tqdata[tqdata$EX == "BAT"]
+tqdata_iex = tqdata[tqdata$EX == "IEX"]
+tqdata_nys = tqdata[tqdata$EX == "NYS"]
+tqdata_dex = tqdata[tqdata$EX == "DEX"]
+tqdata_mmx = tqdata[tqdata$EX == "MMX"]
+tqdata_pse = tqdata[tqdata$EX == "PSE"]
+tqdata_thm = tqdata[tqdata$EX == "THM"]
+tqdata_dea = tqdata[tqdata$EX == "DEA"]
+tqdata_bos = tqdata[tqdata$EX == "BOS"]
+tqdata_ase = tqdata[tqdata$EX == "ASE"]
+tqdata_bty = tqdata[tqdata$EX == "BTY"]
+tqdata_xph = tqdata[tqdata$EX == "XPH"]
+tqdata_cin = tqdata[tqdata$EX == "CIN"]
+tqdata_mpe = tqdata[tqdata$EX == "MPE"]
+tqdata_mid = tqdata[tqdata$EX == "MID"]
+```
+
+```{r, message=FALSE, warning=FALSE}
+market.impact <- function(tqdata, sample_times){
+  sampledata <- sample_times
+  tqdata1hr <- tqdata[sampledata]
+  
+  # calculate trade signs & signed trade volumes
+  tradeSigns <- getTradeDirection(tqdata1hr)
+  signed.x <- as.numeric(tqdata1hr$SIZE)*tradeSigns
+  signed.x <- signed.x[1:(length(signed.x)-1)] # trim to same size as dm
+  
+  # calculate bids, mids, changes in mid prices & trade prices
+  prices <- as.numeric(tqdata1hr$PRICE)
+  asks <- as.numeric(tqdata1hr$OFR)
+  bids <- as.numeric(tqdata1hr$BID)
+  mids <- 0.5*bids + 0.5*asks
+  dm <- diff(mids)
+  dp <- diff(prices)
+  
+  ######################################################
+  # calibrate the Glosten-Harris model (Roll + price impact)
+  # p(t) = m(t) + c*d(t) + lambda*x(t)
+  # m(t) = m(t-1) + lambda*x(t-1) + u(t)
+  ####################################################
+  
+  # Find Lambda 
+  # m(t) = m(t-1) + lambda*x(t-1) + u(t)
+  n <- length(signed.x)
+  dm.lag <- dm
+  
+  (fitGlHarris <- lm(dm.lag ~ signed.x, subset=(abs(signed.x)>100)&abs(signed.x)<10000))
+  lambda <- fitGlHarris$coeff[2]
+  
+  return(lambda)
+}
+
+```
+
+```{r, warning=FALSE, message=FALSE}
+time.subset0 = '2022-03-01 10:00:00::2022-03-01 11:00:00'
+time.subset1 = '2022-03-01 11:00:00::2022-03-01 12:00:00'
+time.subset2 = '2022-03-01 12:00:00::2022-03-01 13:00:00'
+time.subset3 = '2022-03-01 13:00:00::2022-03-01 14:00:00'
+time.subset4 = '2022-03-01 14:00:00::2022-03-01 15:00:00'
+time.subset5 = '2022-03-01 15:00:00::2022-03-01 16:00:00'
+time.subsets = c(time.subset0, time.subset1, time.subset2, time.subset3, time.subset4, time.subset5)
+
+time.subsets = c(
+  '2022-03-01 10:00:00::2022-03-01 10:30:00',
+  '2022-03-01 10:30:00::2022-03-01 11:00:00',
+  '2022-03-01 11:00:00::2022-03-01 11:30:00',
+  '2022-03-01 11:30:00::2022-03-01 12:00:00',
+  '2022-03-01 12:00:00::2022-03-01 12:30:00',
+  '2022-03-01 12:30:00::2022-03-01 13:00:00',
+  '2022-03-01 13:00:00::2022-03-01 13:30:00',
+  '2022-03-01 13:30:00::2022-03-01 14:00:00',
+  '2022-03-01 14:00:00::2022-03-01 14:30:00',
+  '2022-03-01 14:30:00::2022-03-01 15:00:00',
+  '2022-03-01 15:00:00::2022-03-01 15:30:00',
+  '2022-03-01 15:30:00::2022-03-01 16:00:00'
+)
+
+
+price_impact_ex = c()
+for(exchange in exchanges){
+  price_impact_ex = c(price_impact_ex, market.impact(tqdata = tqdata[tqdata$EX == exchange], sample_times = time.subset))
+}
+
+price_impact_ex
+
+ggplot(data.frame(exchanges, price_impact_ex), aes(x=exchanges, y=price_impact_ex)) + geom_bar(stat = "identity")
+```
+
+```{r}
+for(exchange in exchanges){
+  price_impact_time = c()
+  for(time in time.subsets){
+    price_impact_time = c(price_impact_time, market.impact(tqdata = tqdata[tqdata$EX == exchange], sample_times = time))
+  }
+  plot(sequence(length(price_impact_time)), price_impact_time, type="l")
+}
+
+
+
+#price_impact_time
+
+#ggplot(data.frame(exchanges, price_impact_ex), aes(x=exchanges, y=price_impact_ex)) + geom_bar(stat = "identity")
+#plot(price_impact_time, type="l")
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

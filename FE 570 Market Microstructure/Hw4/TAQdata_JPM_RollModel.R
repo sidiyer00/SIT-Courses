@@ -6,7 +6,7 @@ library(highfrequency)
 Sys.setenv(TZ = "EST")  # work in East Coast Time Zone
 options(digits.secs=3)
 
-load("taqdata_JPM_20210113_ESTMktHrs.RData")
+load("taqdata_JPM_20210113.RData")
 
 
 
